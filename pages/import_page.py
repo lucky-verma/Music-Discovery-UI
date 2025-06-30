@@ -11,9 +11,12 @@ def render_import_page():
 
     st.header("📥 Music Library Import & Management")
 
-    # Import section
-    st.subheader("🎵 Import Your Existing Music")
+    # Add the orphaned tracks fix section
+    fix_orphaned_navidrome_tracks()
 
+    st.markdown("---")
+
+    # Your existing import tabs
     import_tab1, import_tab2, import_tab3 = st.tabs(
         ["📂 Folder Import", "💽 External Drive", "🔍 Deduplication"]
     )
@@ -513,3 +516,65 @@ def import_from_external_drive(drive_mount: str, dest_path: str):
             check_duplicates=True,
             fix_metadata=True,
         )
+
+
+def fix_orphaned_navidrome_tracks():
+    """Fix greyed out tracks in Navidrome"""
+    st.subheader("🔧 Fix Orphaned Navidrome Tracks")
+
+    st.warning("⚠️ This will clean up greyed out tracks in Navidrome")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🔄 Trigger Full Library Scan"):
+            try:
+                # Trigger Navidrome full scan
+                result = subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "navidrome",
+                        "curl",
+                        "-X",
+                        "POST",
+                        "http://localhost:4533/api/scanner/scan",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+                if result.returncode == 0:
+                    st.success(
+                        "✅ Library scan triggered! Wait 5-10 minutes for completion."
+                    )
+                else:
+                    st.error("❌ Failed to trigger scan")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    with col2:
+        if st.button("🗑️ Nuclear Database Cleanup", type="secondary"):
+            st.warning("⚠️ This will rebuild Navidrome database (loses playlists)")
+            if st.button("🔴 Confirm Database Rebuild"):
+                try:
+                    # Stop Navidrome, delete database, restart
+                    subprocess.run(
+                        ["docker", "compose", "stop", "navidrome"],
+                        cwd="/mnt/docker-data/navidrome-music-system",
+                    )
+                    subprocess.run(
+                        [
+                            "rm",
+                            "-f",
+                            "/mnt/docker-data/navidrome-music-system/navidrome-data/navidrome.db*",
+                        ]
+                    )
+                    subprocess.run(
+                        ["docker", "compose", "up", "-d", "navidrome"],
+                        cwd="/mnt/docker-data/navidrome-music-system",
+                    )
+                    st.success("✅ Database rebuilt! Navidrome will rescan all files.")
+                except Exception as e:
+                    st.error(f"Error: {e}")

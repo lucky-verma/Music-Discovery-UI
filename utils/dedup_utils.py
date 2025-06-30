@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 from pathlib import Path
+import subprocess
 from mutagen import File as MutagenFile
 from typing import Dict, List, Tuple
 import streamlit as st
@@ -220,9 +221,72 @@ class MusicDeduplicator:
 
         return removed_count
 
+    def notify_navidrome_deletion(self, deleted_files):
+        """Notify Navidrome about deleted files"""
+        try:
+            import time
+
+            # Wait a moment for filesystem to sync
+            time.sleep(2)
+
+            # Trigger Navidrome full scan to update database
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "navidrome",
+                    "curl",
+                    "-X",
+                    "POST",
+                    "http://localhost:4533/api/scanner/scan",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode == 0:
+                st.success("🔄 Triggered Navidrome database update")
+            else:
+                st.warning("⚠️ Could not trigger Navidrome scan automatically")
+                st.info("💡 Please manually refresh your Navidrome library")
+
+        except Exception as e:
+            st.warning(f"Could not notify Navidrome: {e}")
+
+    def remove_duplicates(
+        self, duplicates: Dict[str, List[str]], auto_remove: bool = False
+    ) -> int:
+        """Remove duplicate files, keeping the best version"""
+        removed_count = 0
+        deleted_files = []
+
+        for title_artist, file_paths in duplicates.items():
+            if len(file_paths) > 1:
+                best_file = self.suggest_best_version(file_paths)
+
+                for file_path in file_paths:
+                    if file_path != best_file:
+                        if auto_remove:
+                            try:
+                                os.remove(file_path)
+                                deleted_files.append(file_path)
+                                removed_count += 1
+                                st.success(f"🗑️ Removed: {os.path.basename(file_path)}")
+                            except Exception as e:
+                                st.error(f"❌ Failed to remove {file_path}: {e}")
+                        else:
+                            st.info(f"🔍 Would remove: {file_path}")
+
+        # THIS IS THE KEY: Notify Navidrome about deletions
+        if deleted_files and auto_remove:
+            self.notify_navidrome_deletion(deleted_files)
+
+        return removed_count
+
 
 def render_deduplication_interface():
-    """Render the deduplication interface"""
+    """Render the deduplication interface with Navidrome integration"""
     st.subheader("🔍 Music Deduplication")
 
     deduplicator = MusicDeduplicator()
@@ -268,7 +332,8 @@ def render_deduplication_interface():
                     """
                     )
 
-        col1, col2 = st.columns(2)
+        # FIXED: Add proper Navidrome integration
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             if st.button("👀 Preview Removal (Safe)"):
@@ -278,10 +343,18 @@ def render_deduplication_interface():
                 st.info(f"Would remove {removed} duplicate files")
 
         with col2:
-            if st.button("🗑️ Remove Duplicates (PERMANENT)", type="primary"):
+            if st.button("🗑️ Remove Duplicates", type="primary"):
                 removed = deduplicator.remove_duplicates(
-                    st.session_state.duplicates, auto_remove=True
+                    st.session_state.duplicates,
+                    auto_remove=True,
                 )
                 st.success(f"Removed {removed} duplicate files!")
+                st.info("🔄 Navidrome database will update automatically")
                 del st.session_state.duplicates
                 st.rerun()
+
+        with col3:
+            if st.button("🔄 Force Navidrome Rescan"):
+                # Manual trigger for immediate rescan
+                deduplicator.notify_navidrome_deletion([])
+                st.success("Triggered manual Navidrome library scan!")
