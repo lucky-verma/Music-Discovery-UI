@@ -106,12 +106,15 @@ class MusicDownloader:
             st.error(f"Error extracting info: {str(e)}")
         return None
 
-    def simple_download(self, url, output_path="/music/youtube-music"):
-        """Simple direct download using yt-dlp in ytdl-sub container"""
+    def download_single_song(self, url, artist=None, album=None):
+        """Download single song using working yt-dlp approach"""
         try:
-            # Create download directory structure
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Create organized output path
+            output_template = f"{self.music_path}/%(uploader)s/%(title)s.%(ext)s"
+            if artist:
+                output_template = f"{self.music_path}/{artist}/%(title)s.%(ext)s"
 
+            # Use direct yt-dlp command (simpler and more reliable)
             cmd = [
                 "docker",
                 "exec",
@@ -122,88 +125,25 @@ class MusicDownloader:
                 "mp3",
                 "--audio-quality",
                 "320K",
-                "--output",
-                f"{output_path}/%(uploader)s/%(album)s/%(track_number)02d - %(title)s.%(ext)s",
                 "--embed-thumbnail",
                 "--add-metadata",
-                "--no-playlist",  # Force single video even if URL is playlist
-                "--write-info-json",
+                "--no-playlist",
+                "--output",
+                output_template,
                 url,
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            return result.returncode == 0, result.stdout, result.stderr
-
-        except Exception as e:
-            return False, "", str(e)
-
-    def download_single_song(self, url, artist=None, album=None):
-        """Download a single song using direct yt-dlp"""
-        try:
-            # Use simple download method for better reliability
-            success, stdout, stderr = self.simple_download(url)
-
-            if success:
-                # Trigger Navidrome rescan
-                try:
-                    subprocess.run(
-                        [
-                            "docker",
-                            "exec",
-                            "navidrome",
-                            "curl",
-                            "-X",
-                            "POST",
-                            "http://localhost:4533/api/scanner/scan",
-                        ],
-                        timeout=10,
-                    )
-                except:
-                    pass  # Scan trigger is optional
-
-            return success, stdout, stderr
-
-        except Exception as e:
-            return False, "", str(e)
-
-    def download_playlist(self, url, playlist_name=None):
-        """Download entire playlist using yt-dlp"""
-        try:
-            output_path = f"/music/youtube-music/{playlist_name or 'Playlists'}"
-
-            cmd = [
-                "docker",
-                "exec",
-                "ytdl-sub",
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "320K",
-                "--output",
-                f"{output_path}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
-                "--embed-thumbnail",
-                "--add-metadata",
-                "--yes-playlist",  # Enable playlist mode
-                "--write-info-json",
-                url,
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
             if result.returncode == 0:
                 # Trigger Navidrome rescan
                 try:
                     subprocess.run(
                         [
-                            "docker",
-                            "exec",
-                            "navidrome",
                             "curl",
                             "-X",
                             "POST",
-                            "http://localhost:4533/api/scanner/scan",
+                            "http://192.168.1.31:4533/api/scanner/scan",
                         ],
                         timeout=10,
                     )
@@ -214,6 +154,91 @@ class MusicDownloader:
 
         except Exception as e:
             return False, "", str(e)
+
+    def download_playlist(self, url, playlist_name=None):
+        """Download playlist using working ytdl-sub preset approach"""
+        try:
+            # Use the approach that worked in your tests
+            output_dir = f"{self.music_path}/{playlist_name or 'Playlists'}"
+
+            # Working command based on your successful test
+            cmd = [
+                "docker",
+                "exec",
+                "ytdl-sub",
+                "ytdl-sub",
+                "dl",
+                "--preset",
+                "YouTube Full Albums",
+                "--overrides.music_directory",
+                output_dir,
+                "--overrides.url",
+                url,
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+            if result.returncode == 0:
+                # Trigger Navidrome rescan
+                try:
+                    subprocess.run(
+                        [
+                            "curl",
+                            "-X",
+                            "POST",
+                            "http://192.168.1.31:4533/api/scanner/scan",
+                        ],
+                        timeout=10,
+                    )
+                except:
+                    pass
+
+            return result.returncode == 0, result.stdout, result.stderr
+
+        except Exception as e:
+            return False, "", str(e)
+
+    def search_youtube(self, query):
+        """Search YouTube using yt-dlp"""
+        try:
+            cmd = [
+                "docker",
+                "exec",
+                "ytdl-sub",
+                "yt-dlp",
+                "--flat-playlist",
+                "--dump-json",
+                "--playlist-end",
+                "10",  # Limit to 10 results
+                f"ytsearch10:{query}",
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+            if result.returncode == 0:
+                lines = result.stdout.strip().split("\n")
+                results = []
+
+                for line in lines:
+                    try:
+                        item = json.loads(line)
+                        results.append(
+                            {
+                                "title": item.get("title", "Unknown"),
+                                "uploader": item.get("uploader", "Unknown"),
+                                "duration": item.get("duration", 0),
+                                "url": f"https://youtube.com/watch?v={item.get('id', '')}",
+                            }
+                        )
+                    except:
+                        continue
+
+                return results
+
+        except Exception as e:
+            st.error(f"Search failed: {str(e)}")
+
+        return []
 
 
 def main():
