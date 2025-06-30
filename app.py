@@ -1,17 +1,32 @@
+# Replace your entire app.py with this corrected version
 import streamlit as st
 import sys
 import os
 import subprocess
 
-# Add current directory to path for imports
-sys.path.append(os.path.dirname(__file__))
+# FIXED: Proper path handling for Docker container
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
-from services.spotify_service import SpotifyService
-from services.youtube_service import YouTubeService
-from services.job_service import JobManager
-from components.sidebar import render_sidebar
-from pages.discovery import render_discovery_page
-from pages.import_page import render_import_page
+# FIXED: Add explicit path for modules
+sys.path.insert(0, os.path.join(current_dir, "services"))
+sys.path.insert(0, os.path.join(current_dir, "components"))
+sys.path.insert(0, os.path.join(current_dir, "pages"))
+sys.path.insert(0, os.path.join(current_dir, "utils"))
+
+# Now import with error handling
+try:
+    from services.spotify_service import SpotifyService
+    from services.youtube_service import YouTubeService
+    from services.job_service import JobManager
+    from components.sidebar import render_sidebar
+    from pages.discovery import render_discovery_page
+    from pages.import_page import render_import_page
+except ImportError as e:
+    st.error(f"Import Error: {e}")
+    st.error("Please check that all module files exist and are properly configured.")
+    st.stop()
 
 # Page configuration
 st.set_page_config(
@@ -77,22 +92,29 @@ st.markdown(
 def main():
     """Main application"""
 
-    # Initialize services
-    if "spotify_service" not in st.session_state:
-        st.session_state.spotify_service = SpotifyService()
+    # Initialize services with error handling
+    try:
+        if "spotify_service" not in st.session_state:
+            st.session_state.spotify_service = SpotifyService()
 
-    if "youtube_service" not in st.session_state:
-        st.session_state.youtube_service = YouTubeService()
+        if "youtube_service" not in st.session_state:
+            st.session_state.youtube_service = YouTubeService()
 
-    if "job_manager" not in st.session_state:
-        st.session_state.job_manager = JobManager()
+        if "job_manager" not in st.session_state:
+            st.session_state.job_manager = JobManager()
+    except Exception as e:
+        st.error(f"Service initialization error: {e}")
+        st.stop()
 
     # Header
     st.title("🎵 Lucky's Music Discovery Hub")
     st.markdown("**Your Personal Music Automation Empire**")
 
     # Render sidebar
-    render_sidebar(st.session_state.spotify_service, st.session_state.job_manager)
+    try:
+        render_sidebar(st.session_state.spotify_service, st.session_state.job_manager)
+    except Exception as e:
+        st.error(f"Sidebar error: {e}")
 
     # Main content tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -112,14 +134,22 @@ def main():
         render_playlist_manager_tab()
 
     with tab3:
-        render_discovery_page(
-            st.session_state.spotify_service,
-            st.session_state.youtube_service,
-            st.session_state.job_manager,
-        )
+        try:
+            render_discovery_page(
+                st.session_state.spotify_service,
+                st.session_state.youtube_service,
+                st.session_state.job_manager,
+            )
+        except Exception as e:
+            st.error(f"Discovery page error: {e}")
+            st.info("Discovery features temporarily unavailable.")
 
     with tab4:
-        render_import_page()
+        try:
+            render_import_page()
+        except Exception as e:
+            st.error(f"Import page error: {e}")
+            st.info("Import features temporarily unavailable.")
 
     with tab5:
         render_download_status_tab()
@@ -140,8 +170,6 @@ def main():
 
 def render_quick_download_tab():
     """Render quick download tab"""
-    from components.music_card import display_music_card
-
     st.header("🎵 Quick Song Download")
 
     col1, col2 = st.columns([2, 1])
@@ -169,28 +197,36 @@ def render_quick_download_tab():
         if st.button("👁️ Preview Info", disabled=not url):
             if url:
                 with st.spinner("Fetching video info..."):
-                    info = st.session_state.youtube_service.get_video_info(url)
-                    if info:
-                        st.markdown(
-                            f"""
-                        <div class="info-box">
-                        <strong>Title:</strong> {info['title']}<br>
-                        <strong>Artist:</strong> {info['uploader']}<br>
-                        <strong>Duration:</strong> {info['duration']//60}:{info['duration']%60:02d}<br>
-                        <strong>Views:</strong> {info['view_count']:,}
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
+                    try:
+                        info = st.session_state.youtube_service.get_video_info(url)
+                        if info:
+                            st.markdown(
+                                f"""
+                            <div class="info-box">
+                            <strong>Title:</strong> {info['title']}<br>
+                            <strong>Artist:</strong> {info['uploader']}<br>
+                            <strong>Duration:</strong> {info['duration']//60}:{info['duration']%60:02d}<br>
+                            <strong>Views:</strong> {info['view_count']:,}
+                            </div>
+                            """,
+                                unsafe_allow_html=True,
+                            )
+                    except Exception as e:
+                        st.error(f"Preview error: {e}")
 
     st.markdown("---")
 
     if st.button("📥 Download Song (Background)", type="primary", disabled=not url):
         if url:
-            job_id = st.session_state.job_manager.add_job(
-                "single_song", url, {"artist": artist_override, "album": album_override}
-            )
-            st.success(f"✅ Download queued! Job ID: {job_id}")
+            try:
+                job_id = st.session_state.job_manager.add_job(
+                    "single_song",
+                    url,
+                    {"artist": artist_override, "album": album_override},
+                )
+                st.success(f"✅ Download queued! Job ID: {job_id}")
+            except Exception as e:
+                st.error(f"Download error: {e}")
 
 
 def render_playlist_manager_tab():
@@ -213,12 +249,15 @@ def render_playlist_manager_tab():
         "📥 Download Playlist (Background)", type="primary", disabled=not playlist_url
     ):
         if playlist_url:
-            job_id = st.session_state.job_manager.add_job(
-                "playlist",
-                playlist_url,
-                {"playlist_name": playlist_name or "Downloaded Playlist"},
-            )
-            st.success(f"✅ Playlist download queued! Job ID: {job_id}")
+            try:
+                job_id = st.session_state.job_manager.add_job(
+                    "playlist",
+                    playlist_url,
+                    {"playlist_name": playlist_name or "Downloaded Playlist"},
+                )
+                st.success(f"✅ Playlist download queued! Job ID: {job_id}")
+            except Exception as e:
+                st.error(f"Playlist download error: {e}")
 
 
 def render_download_status_tab():
@@ -228,7 +267,11 @@ def render_download_status_tab():
     if st.button("🔄 Refresh Status"):
         st.rerun()
 
-    jobs = st.session_state.job_manager.get_all_jobs()
+    try:
+        jobs = st.session_state.job_manager.get_all_jobs()
+    except Exception as e:
+        st.error(f"Error loading jobs: {e}")
+        jobs = {}
 
     if not jobs:
         st.info("No download jobs yet. Start downloading some music!")
