@@ -536,76 +536,50 @@ def main():
             if search_query:
                 with st.spinner("Searching YouTube Music..."):
                     try:
-                        # Use yt-dlp to search
-                        cmd = [
-                            "yt-dlp",
-                            "--flat-playlist",
-                            "--dump-json",
-                            f"ytsearch10:{search_query}",
-                        ]
-                        result = subprocess.run(
-                            cmd, capture_output=True, text=True, timeout=30
-                        )
+                        results = downloader.search_youtube(search_query)
 
-                        if result.returncode == 0:
-                            lines = result.stdout.strip().split("\n")
-                            results = []
+                        if results:
+                            st.markdown("**Search Results:**")
+                            for i, result in enumerate(results):
+                                col1, col2, col3 = st.columns([3, 1, 1])
 
-                            for line in lines:
-                                try:
-                                    item = json.loads(line)
-                                    results.append(
-                                        {
-                                            "title": item.get("title", "Unknown"),
-                                            "uploader": item.get("uploader", "Unknown"),
-                                            "duration": f"{item.get('duration', 0)//60}:{item.get('duration', 0)%60:02d}",
-                                            "url": f"https://youtube.com/watch?v={item.get('id', '')}",
-                                        }
+                                with col1:
+                                    duration_str = (
+                                        f"{result['duration']//60}:{result['duration']%60:02d}"
+                                        if result["duration"]
+                                        else "N/A"
                                     )
-                                except:
-                                    continue
+                                    st.markdown(
+                                        f"""
+                                    **{result['title']}**  
+                                    By: {result['uploader']} | Duration: {duration_str}
+                                    """
+                                    )
 
-                            if results:
-                                st.markdown("**Search Results:**")
-                                for i, result in enumerate(results):
-                                    col1, col2, col3 = st.columns([3, 1, 1])
+                                with col2:
+                                    if st.button(
+                                        f"📥", key=f"download_{i}", help="Download this song"
+                                    ):
+                                        # Quick download
+                                        with st.spinner("Downloading..."):
+                                            success, stdout, stderr = (
+                                                downloader.download_single_song(result["url"])
+                                            )
+                                            if success:
+                                                st.success("✅ Downloaded!")
+                                            else:
+                                                st.error(f"❌ Failed: {stderr[:100]}...")
 
-                                    with col1:
-                                        st.markdown(
-                                            f"""
-                                        **{result['title']}**  
-                                        By: {result['uploader']} | Duration: {result['duration']}
-                                        """
-                                        )
+                                with col3:
+                                    if st.button(f"📋", key=f"copy_{i}", help="Copy URL"):
+                                        st.code(result["url"])
 
-                                    with col2:
-                                        if st.button(
-                                            f"📥",
-                                            key=f"download_{i}",
-                                            help="Download this song",
-                                        ):
-                                            # Quick download
-                                            with st.spinner("Downloading..."):
-                                                success, _, _ = (
-                                                    downloader.download_single_song(
-                                                        result["url"]
-                                                    )
-                                                )
-                                                if success:
-                                                    st.success("✅ Downloaded!")
-                                                else:
-                                                    st.error("❌ Failed")
+                                st.markdown("---")
+                        else:
+                            st.warning("No results found. Try different search terms.")
 
-                                    with col3:
-                                        if st.button(
-                                            f"📋", key=f"copy_{i}", help="Copy URL"
-                                        ):
-                                            st.code(result["url"])
-
-                                    st.markdown("---")
                     except Exception as e:
                         st.error(f"Search failed: {str(e)}")
-
         # Trending and recommendations
         st.markdown("---")
         st.subheader("🔥 Quick Access")
