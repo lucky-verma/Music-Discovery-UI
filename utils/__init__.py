@@ -10,4 +10,4 @@ This package contains utility functions and classes:
 from .config import Config
 from .dedup_utils import MusicDeduplicator
 
-__all__ = ['Config', 'MusicDeduplicator']
+__all__ = ["Config", "MusicDeduplicator"]

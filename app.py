@@ -1,30 +1,31 @@
-# Replace your entire app.py with this corrected version
 import streamlit as st
 import sys
 import os
 import subprocess
 
-# FIXED: Proper path handling for Docker container
+# Proper path handling for all environments
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# FIXED: Add explicit path for modules
-sys.path.insert(0, os.path.join(current_dir, "services"))
-sys.path.insert(0, os.path.join(current_dir, "components"))
-sys.path.insert(0, os.path.join(current_dir, "pages"))
-sys.path.insert(0, os.path.join(current_dir, "utils"))
-
-# Now import with error handling
+# Import with proper error handling
 try:
     from services.spotify_service import SpotifyService
     from services.youtube_service import YouTubeService
     from services.job_service import JobManager
     from components.sidebar import render_sidebar
-    from pages.discovery import render_discovery_page
-    from pages.import_page import render_import_page
+
+    # Check if pages modules exist
+    pages_available = True
+    try:
+        from pages.discovery import render_discovery_page
+        from pages.import_page import render_import_page
+    except ImportError as e:
+        st.error(f"Pages import error: {e}")
+        pages_available = False
+
 except ImportError as e:
-    st.error(f"Import Error: {e}")
+    st.error(f"Critical import error: {e}")
     st.error("Please check that all module files exist and are properly configured.")
     st.stop()
 
@@ -134,22 +135,30 @@ def main():
         render_playlist_manager_tab()
 
     with tab3:
-        try:
-            render_discovery_page(
-                st.session_state.spotify_service,
-                st.session_state.youtube_service,
-                st.session_state.job_manager,
-            )
-        except Exception as e:
-            st.error(f"Discovery page error: {e}")
-            st.info("Discovery features temporarily unavailable.")
+        if pages_available:
+            try:
+                render_discovery_page(
+                    st.session_state.spotify_service,
+                    st.session_state.youtube_service,
+                    st.session_state.job_manager,
+                )
+            except Exception as e:
+                st.error(f"Discovery page error: {e}")
+                st.info("Discovery features temporarily unavailable.")
+                # Show basic fallback content
+                st.header("🔍 Music Discovery")
+                st.info("Please check the application logs for import issues.")
 
     with tab4:
-        try:
-            render_import_page()
-        except Exception as e:
-            st.error(f"Import page error: {e}")
-            st.info("Import features temporarily unavailable.")
+        if pages_available:
+            try:
+                render_import_page()
+            except Exception as e:
+                st.error(f"Import page error: {e}")
+                st.info("Import features temporarily unavailable.")
+                # Show basic fallback content
+                st.header("📥 Music Import & Management")
+                st.info("Please check the application logs for import issues.")
 
     with tab5:
         render_download_status_tab()
