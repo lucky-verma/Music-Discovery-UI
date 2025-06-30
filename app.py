@@ -1,9 +1,7 @@
-# File: app.py
 import streamlit as st
 import subprocess
 import os
 import json
-import requests
 import re
 from datetime import datetime
 import pandas as pd
@@ -62,7 +60,7 @@ st.markdown(
 class MusicDownloader:
     def __init__(self):
         self.config_path = "/config"
-        self.music_path = "/music/youtube-music"
+        self.music_path = "/music/youtube-music"  # FIXED: Specific subfolder
 
     def validate_url(self, url):
         """Validate YouTube/YouTube Music URL"""
@@ -80,7 +78,7 @@ class MusicDownloader:
     def extract_video_info(self, url):
         """Extract basic info from URL without downloading"""
         try:
-            # Use docker exec to run yt-dlp in the ytdl-sub container
+            # FIXED: Use docker exec to run yt-dlp in the ytdl-sub container
             cmd = [
                 "docker",
                 "exec",
@@ -94,7 +92,7 @@ class MusicDownloader:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 lines = result.stdout.strip().split("\n")
-                if lines:
+                if lines and lines[0].strip():
                     info = json.loads(lines[0])
                     return {
                         "title": info.get("title", "Unknown"),
@@ -107,14 +105,19 @@ class MusicDownloader:
         return None
 
     def download_single_song(self, url, artist=None, album=None):
-        """Download single song using working yt-dlp approach"""
+        """Download single song using direct yt-dlp"""
         try:
             # Create organized output path
-            output_template = f"{self.music_path}/%(uploader)s/%(title)s.%(ext)s"
-            if artist:
+            if artist and album:
+                output_template = (
+                    f"{self.music_path}/{artist}/{album}/%(title)s.%(ext)s"
+                )
+            elif artist:
                 output_template = f"{self.music_path}/{artist}/%(title)s.%(ext)s"
+            else:
+                output_template = f"{self.music_path}/%(uploader)s/%(title)s.%(ext)s"
 
-            # Use direct yt-dlp command (simpler and more reliable)
+            # FIXED: Use direct yt-dlp command via docker exec
             cmd = [
                 "docker",
                 "exec",
@@ -137,18 +140,7 @@ class MusicDownloader:
 
             if result.returncode == 0:
                 # Trigger Navidrome rescan
-                try:
-                    subprocess.run(
-                        [
-                            "curl",
-                            "-X",
-                            "POST",
-                            "http://192.168.1.31:4533/api/scanner/scan",
-                        ],
-                        timeout=10,
-                    )
-                except:
-                    pass
+                self.trigger_navidrome_scan()
 
             return result.returncode == 0, result.stdout, result.stderr
 
@@ -156,47 +148,57 @@ class MusicDownloader:
             return False, "", str(e)
 
     def download_playlist(self, url, playlist_name=None):
-        """Download playlist using working ytdl-sub preset approach"""
+        """Download playlist using direct yt-dlp"""
         try:
-            # Use the approach that worked in your tests
             output_dir = f"{self.music_path}/{playlist_name or 'Playlists'}"
 
-            # Working command based on your successful test
+            # FIXED: Use direct yt-dlp for playlist downloads
             cmd = [
                 "docker",
                 "exec",
                 "ytdl-sub",
-                "ytdl-sub",
-                "dl",
-                "--preset",
-                "YouTube Full Albums",
-                "--overrides.music_directory",
-                output_dir,
-                "--overrides.url",
+                "yt-dlp",
+                "--extract-audio",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "320K",
+                "--embed-thumbnail",
+                "--add-metadata",
+                "--yes-playlist",
+                "--output",
+                f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
                 url,
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
             if result.returncode == 0:
-                # Trigger Navidrome rescan
-                try:
-                    subprocess.run(
-                        [
-                            "curl",
-                            "-X",
-                            "POST",
-                            "http://192.168.1.31:4533/api/scanner/scan",
-                        ],
-                        timeout=10,
-                    )
-                except:
-                    pass
+                self.trigger_navidrome_scan()
 
             return result.returncode == 0, result.stdout, result.stderr
 
         except Exception as e:
             return False, "", str(e)
+
+    def trigger_navidrome_scan(self):
+        """Trigger Navidrome to scan for new files"""
+        try:
+            # Try to trigger scan via API
+            subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "navidrome",
+                    "curl",
+                    "-X",
+                    "POST",
+                    "http://localhost:4533/api/scanner/scan",
+                ],
+                timeout=10,
+            )
+        except:
+            pass  # Scan trigger is optional
 
     def search_youtube(self, query):
         """Search YouTube using yt-dlp"""
@@ -209,7 +211,7 @@ class MusicDownloader:
                 "--flat-playlist",
                 "--dump-json",
                 "--playlist-end",
-                "10",  # Limit to 10 results
+                "10",
                 f"ytsearch10:{query}",
             ]
 
@@ -221,15 +223,16 @@ class MusicDownloader:
 
                 for line in lines:
                     try:
-                        item = json.loads(line)
-                        results.append(
-                            {
-                                "title": item.get("title", "Unknown"),
-                                "uploader": item.get("uploader", "Unknown"),
-                                "duration": item.get("duration", 0),
-                                "url": f"https://youtube.com/watch?v={item.get('id', '')}",
-                            }
-                        )
+                        if line.strip():
+                            item = json.loads(line)
+                            results.append(
+                                {
+                                    "title": item.get("title", "Unknown"),
+                                    "uploader": item.get("uploader", "Unknown"),
+                                    "duration": item.get("duration", 0),
+                                    "url": f"https://youtube.com/watch?v={item.get('id', '')}",
+                                }
+                            )
                     except:
                         continue
 
@@ -248,28 +251,28 @@ def main():
     # Initialize downloader
     downloader = MusicDownloader()
 
-    # Sidebar for settings and automation
+    # Sidebar for stats and info
     with st.sidebar:
-        st.header("🔧 Settings & Automation")
+        st.header("🔧 Music Library")
 
         # Quick stats
         st.subheader("📊 Library Stats")
         try:
+            # Count music files
+            music_count_cmd = [
+                "find",
+                "/music",
+                "-name",
+                "*.mp3",
+                "-o",
+                "-name",
+                "*.m4a",
+                "-o",
+                "-name",
+                "*.flac",
+            ]
             music_files = subprocess.run(
-                [
-                    "find",
-                    "/music",
-                    "-name",
-                    "*.mp3",
-                    "-o",
-                    "-name",
-                    "*.m4a",
-                    "-o",
-                    "-name",
-                    "*.flac",
-                ],
-                capture_output=True,
-                text=True,
+                music_count_cmd, capture_output=True, text=True
             )
             file_count = len([f for f in music_files.stdout.split("\n") if f.strip()])
             st.metric("Total Tracks", file_count)
@@ -278,55 +281,19 @@ def main():
 
         st.markdown("---")
 
-        # Automation section
-        st.subheader("🤖 Automation Setup")
+        # Quick links
+        st.subheader("🎧 Quick Access")
+        st.markdown("**Music Player:**")
+        st.markdown("[🎵 Open Navidrome](https://music.luckyverma.com)")
 
-        # YouTube Music Liked Songs
-        st.markdown("**YouTube Music Integration:**")
-        youtube_liked = st.text_input(
-            "Liked Songs Playlist ID", placeholder="LM or your liked songs ID"
-        )
-
-        # Spotify playlists
-        st.markdown("**Spotify Playlists:**")
-        spotify_playlists = st.text_area(
-            "Playlist URLs (one per line)",
-            placeholder="https://open.spotify.com/playlist/...\nhttps://open.spotify.com/playlist/...",
-        )
-
-        # Auto-download frequency
-        auto_frequency = st.selectbox(
-            "Auto-download frequency",
-            ["Manual only", "Every hour", "Every 3 hours", "Every 6 hours", "Daily"],
-        )
-
-        if st.button("💾 Save Automation Settings"):
-            # Save automation settings to config
-            automation_config = {
-                "automation": {
-                    "youtube_liked": youtube_liked,
-                    "spotify_playlists": (
-                        spotify_playlists.split("\n") if spotify_playlists else []
-                    ),
-                    "frequency": auto_frequency,
-                }
-            }
-
-            try:
-                with open("/config/automation_settings.json", "w") as f:
-                    json.dump(automation_config, f)
-                st.success("✅ Automation settings saved!")
-            except Exception as e:
-                st.error(f"❌ Error saving settings: {str(e)}")
+        st.markdown("**Download Folders:**")
+        st.code("/music/youtube-music/")
+        st.code("/music/library/")
+        st.code("/music/playlists/")
 
     # Main content area
     tab1, tab2, tab3, tab4 = st.tabs(
-        [
-            "🎵 Quick Download",
-            "📋 Playlist Manager",
-            "🔍 Discovery",
-            "📊 Download History",
-        ]
+        ["🎵 Quick Download", "📋 Playlist Manager", "🔍 Discovery", "📊 Activity"]
     )
 
     with tab1:
@@ -485,16 +452,20 @@ def main():
                             st.error(f"❌ Playlist download failed: {stderr[:200]}...")
 
         with col2:
-            # Playlist preview button
             if st.button("👁️ Preview Playlist", disabled=not playlist_url):
                 if playlist_url:
                     with st.spinner("Fetching playlist info..."):
-                        # Get playlist info
+                        # Get basic playlist info
                         try:
                             cmd = [
+                                "docker",
+                                "exec",
+                                "ytdl-sub",
                                 "yt-dlp",
                                 "--flat-playlist",
                                 "--dump-json",
+                                "--playlist-end",
+                                "5",
                                 playlist_url,
                             ]
                             result = subprocess.run(
@@ -503,22 +474,23 @@ def main():
                             if result.returncode == 0:
                                 lines = result.stdout.strip().split("\n")
                                 tracks = []
-                                for line in lines[:10]:  # Show first 10 tracks
+                                for line in lines[:5]:  # Show first 5 tracks
                                     try:
-                                        track_info = json.loads(line)
-                                        tracks.append(
-                                            {
-                                                "Title": track_info.get(
-                                                    "title", "Unknown"
-                                                ),
-                                                "Duration": f"{track_info.get('duration', 0)//60}:{track_info.get('duration', 0)%60:02d}",
-                                            }
-                                        )
+                                        if line.strip():
+                                            track_info = json.loads(line)
+                                            tracks.append(
+                                                {
+                                                    "Title": track_info.get(
+                                                        "title", "Unknown"
+                                                    ),
+                                                    "Duration": f"{track_info.get('duration', 0)//60}:{track_info.get('duration', 0)%60:02d}",
+                                                }
+                                            )
                                     except:
                                         continue
 
                                 if tracks:
-                                    st.markdown("**Preview (first 10 tracks):**")
+                                    st.markdown("**Preview (first 5 tracks):**")
                                     df = pd.DataFrame(tracks)
                                     st.dataframe(df, use_container_width=True)
                         except Exception as e:
@@ -535,97 +507,86 @@ def main():
         if st.button("🔍 Search", disabled=not search_query):
             if search_query:
                 with st.spinner("Searching YouTube Music..."):
-                    try:
-                        results = downloader.search_youtube(search_query)
+                    results = downloader.search_youtube(search_query)
 
-                        if results:
-                            st.markdown("**Search Results:**")
-                            for i, result in enumerate(results):
-                                col1, col2, col3 = st.columns([3, 1, 1])
+                    if results:
+                        st.markdown("**Search Results:**")
+                        for i, result in enumerate(results):
+                            col1, col2, col3 = st.columns([3, 1, 1])
 
-                                with col1:
-                                    duration_str = (
-                                        f"{result['duration']//60}:{result['duration']%60:02d}"
-                                        if result["duration"]
-                                        else "N/A"
-                                    )
-                                    st.markdown(
-                                        f"""
-                                    **{result['title']}**  
-                                    By: {result['uploader']} | Duration: {duration_str}
-                                    """
-                                    )
+                            with col1:
+                                duration_str = (
+                                    f"{result['duration']//60}:{result['duration']%60:02d}"
+                                    if result["duration"]
+                                    else "N/A"
+                                )
+                                st.markdown(
+                                    f"""
+                                **{result['title']}**  
+                                By: {result['uploader']} | Duration: {duration_str}
+                                """
+                                )
 
-                                with col2:
-                                    if st.button(
-                                        f"📥", key=f"download_{i}", help="Download this song"
-                                    ):
-                                        # Quick download
-                                        with st.spinner("Downloading..."):
-                                            success, stdout, stderr = (
-                                                downloader.download_single_song(result["url"])
+                            with col2:
+                                if st.button(
+                                    f"📥",
+                                    key=f"download_{i}",
+                                    help="Download this song",
+                                ):
+                                    with st.spinner("Downloading..."):
+                                        success, stdout, stderr = (
+                                            downloader.download_single_song(
+                                                result["url"]
                                             )
-                                            if success:
-                                                st.success("✅ Downloaded!")
-                                            else:
-                                                st.error(f"❌ Failed: {stderr[:100]}...")
+                                        )
+                                        if success:
+                                            st.success("✅ Downloaded!")
+                                        else:
+                                            st.error(f"❌ Failed: {stderr[:100]}...")
 
-                                with col3:
-                                    if st.button(f"📋", key=f"copy_{i}", help="Copy URL"):
-                                        st.code(result["url"])
+                            with col3:
+                                if st.button(f"📋", key=f"copy_{i}", help="Copy URL"):
+                                    st.code(result["url"])
 
-                                st.markdown("---")
-                        else:
-                            st.warning("No results found. Try different search terms.")
+                            st.markdown("---")
+                    else:
+                        st.warning("No results found. Try different search terms.")
 
-                    except Exception as e:
-                        st.error(f"Search failed: {str(e)}")
-        # Trending and recommendations
+        # Quick genre/region search
         st.markdown("---")
-        st.subheader("🔥 Quick Access")
+        st.subheader("🔥 Quick Discovery")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
             st.markdown("**🎵 Music Genres:**")
-            genres = [
-                "Pop",
-                "Rock",
-                "Hip Hop",
-                "Electronic",
-                "Classical",
-                "Jazz",
-                "Country",
-                "R&B",
-            ]
-            selected_genre = st.selectbox("Browse by genre:", genres)
-            if st.button(f"🔍 Search {selected_genre}"):
-                st.query_params.search = f"{selected_genre} music 2024"
+            if st.button("🎸 Rock Hits"):
+                st.query_params.search = "rock hits 2024"
+            if st.button("🎤 Pop Music"):
+                st.query_params.search = "pop music hits"
+            if st.button("🎧 Electronic"):
+                st.query_params.search = "electronic music"
 
         with col2:
             st.markdown("**🌍 Regional Music:**")
-            regions = [
-                "Bollywood",
-                "K-Pop",
-                "J-Pop",
-                "Latin",
-                "Arabic",
-                "African",
-                "European",
-            ]
-            selected_region = st.selectbox("Browse by region:", regions)
-            if st.button(f"🔍 Search {selected_region}"):
-                st.query_params.search = f"{selected_region} music hits"
+            if st.button("🇮🇳 Bollywood"):
+                st.query_params.search = "bollywood hits"
+            if st.button("🇰🇷 K-Pop"):
+                st.query_params.search = "kpop hits"
+            if st.button("🇯🇵 J-Pop"):
+                st.query_params.search = "jpop hits"
 
         with col3:
             st.markdown("**📅 Time Periods:**")
-            periods = ["2024", "2023", "2020s", "2010s", "2000s", "90s", "80s", "70s"]
-            selected_period = st.selectbox("Browse by era:", periods)
-            if st.button(f"🔍 Search {selected_period}"):
-                st.query_params.search = f"best songs {selected_period}"
+            if st.button("🆕 2024 Hits"):
+                st.query_params.search = "best songs 2024"
+            if st.button("📻 90s Classics"):
+                st.query_params.search = "90s hits"
+            if st.button("🎶 80s Music"):
+                st.query_params.search = "80s classics"
 
     with tab4:
-        st.header("📊 Download History & Stats")
+        st.header("📊 Download Activity")
 
         # Load download history
         try:
@@ -691,22 +652,12 @@ def main():
         except Exception as e:
             st.error(f"Error loading history: {str(e)}")
 
-        # Clear history button
-        if st.button("🗑️ Clear History", type="secondary"):
-            try:
-                if os.path.exists("/config/download_history.json"):
-                    os.remove("/config/download_history.json")
-                st.success("History cleared!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error clearing history: {str(e)}")
-
     # Footer
     st.markdown("---")
     st.markdown(
         """
     <div style="text-align: center; color: #666;">
-    🎵 Lucky's Music Empire | Powered by ytdl-sub & Navidrome | 
+    🎵 Lucky's Music Empire | Powered by yt-dlp & Navidrome | 
     <a href="https://music.luckyverma.com" target="_blank">🎧 Open Music Player</a>
     </div>
     """,
