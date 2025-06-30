@@ -106,81 +106,109 @@ class MusicDownloader:
             st.error(f"Error extracting info: {str(e)}")
         return None
 
-    def download_single_song(self, url, artist=None, album=None):
-        """Download a single song using ytdl-sub container"""
+    def simple_download(self, url, output_path="/music/youtube-music"):
+        """Simple direct download using yt-dlp in ytdl-sub container"""
         try:
-            # Create temporary subscription file
-            subscription = {
-                "temp_download": {
-                    "preset": ["Max MP3 Quality"],
-                    "overrides": {"music_directory": self.music_path, "url": url},
-                }
-            }
+            # Create download directory structure
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-            if artist:
-                subscription["temp_download"]["overrides"]["artist"] = artist
-            if album:
-                subscription["temp_download"]["overrides"]["album"] = album
-
-            # Write subscription file
-            sub_file = f"{self.config_path}/temp_download.yaml"
-            with open(sub_file, "w") as f:
-                import yaml
-
-                yaml.dump(subscription, f)
-
-            # Run ytdl-sub via docker exec
             cmd = [
                 "docker",
                 "exec",
                 "ytdl-sub",
-                "ytdl-sub",
-                "sub",
-                "/config/temp_download.yaml",
+                "yt-dlp",
+                "--extract-audio",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "320K",
+                "--output",
+                f"{output_path}/%(uploader)s/%(album)s/%(track_number)02d - %(title)s.%(ext)s",
+                "--embed-thumbnail",
+                "--add-metadata",
+                "--no-playlist",  # Force single video even if URL is playlist
+                "--write-info-json",
+                url,
             ]
+
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-            # Clean up temp file
-            if os.path.exists(sub_file):
-                os.remove(sub_file)
-
             return result.returncode == 0, result.stdout, result.stderr
 
         except Exception as e:
             return False, "", str(e)
 
-    def download_playlist(self, url, playlist_name=None):
-        """Download entire playlist using ytdl-sub container"""
+    def download_single_song(self, url, artist=None, album=None):
+        """Download a single song using direct yt-dlp"""
         try:
-            subscription = {
-                "playlist_download": {
-                    "preset": ["YouTube Full Albums"],
-                    "overrides": {
-                        "music_directory": f"{self.music_path}/{playlist_name or 'Playlists'}",
-                        "url": url,
-                    },
-                }
-            }
+            # Use simple download method for better reliability
+            success, stdout, stderr = self.simple_download(url)
 
-            sub_file = f"{self.config_path}/temp_playlist.yaml"
-            with open(sub_file, "w") as f:
-                import yaml
+            if success:
+                # Trigger Navidrome rescan
+                try:
+                    subprocess.run(
+                        [
+                            "docker",
+                            "exec",
+                            "navidrome",
+                            "curl",
+                            "-X",
+                            "POST",
+                            "http://localhost:4533/api/scanner/scan",
+                        ],
+                        timeout=10,
+                    )
+                except:
+                    pass  # Scan trigger is optional
 
-                yaml.dump(subscription, f)
+            return success, stdout, stderr
 
-            # Run ytdl-sub via docker exec
+        except Exception as e:
+            return False, "", str(e)
+
+    def download_playlist(self, url, playlist_name=None):
+        """Download entire playlist using yt-dlp"""
+        try:
+            output_path = f"/music/youtube-music/{playlist_name or 'Playlists'}"
+
             cmd = [
                 "docker",
                 "exec",
                 "ytdl-sub",
-                "ytdl-sub",
-                "sub",
-                "/config/temp_playlist.yaml",
+                "yt-dlp",
+                "--extract-audio",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "320K",
+                "--output",
+                f"{output_path}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
+                "--embed-thumbnail",
+                "--add-metadata",
+                "--yes-playlist",  # Enable playlist mode
+                "--write-info-json",
+                url,
             ]
+
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
-            if os.path.exists(sub_file):
-                os.remove(sub_file)
+            if result.returncode == 0:
+                # Trigger Navidrome rescan
+                try:
+                    subprocess.run(
+                        [
+                            "docker",
+                            "exec",
+                            "navidrome",
+                            "curl",
+                            "-X",
+                            "POST",
+                            "http://localhost:4533/api/scanner/scan",
+                        ],
+                        timeout=10,
+                    )
+                except:
+                    pass
 
             return result.returncode == 0, result.stdout, result.stderr
 
