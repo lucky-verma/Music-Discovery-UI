@@ -1,0 +1,103 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    restart: unless-stopped
+    ports:
+      - "4533:4533"
+    environment:
+      # Basic Configuration
+      - ND_MUSICFOLDER=/music
+      - ND_SCANSCHEDULE=@every 15m        # Quick detection of new downloads
+      - ND_LOGLEVEL=info
+      - ND_SESSIONTIMEOUT=24h
+      
+      # Performance Optimization
+      - ND_TRANSCODINGCACHESIZE=1GB
+      - ND_IMAGECACHESIZE=500MB
+      - ND_SCANNER_EXTRAEXTENSIONS=m4a,wma,oga,aac,opus,webm
+      
+      # Audio Quality Settings
+      - ND_ENABLETRANSCODINGCONFIG=true
+      - ND_MAXBITRATE=320
+      - ND_DEFAULTBITRATE=256
+      
+      # Premium Features (Spotify-like)
+      - ND_ENABLESTARRATING=true
+      - ND_ENABLEFAVOURITES=true
+      - ND_ENABLESHARING=true
+      - ND_ENABLEPLAYQUEUE=true
+      - ND_ENABLEDOWNLOADS=true
+      
+      # Import Features
+      - ND_AUTOIMPORTPLAYLISTS=true
+      - ND_PLAYLISTSPATH=/music/playlists
+      
+      # UI Customization
+      - ND_UIWELCOMEMESSAGE="🎵 Lucky's Music Empire - Unlimited Streaming"
+    volumes:
+      - ./navidrome-data:/data
+      - /music:/music:ro
+    user: "0:0"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4533/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ytdl-sub-gui:
+    image: ghcr.io/jmbannon/ytdl-sub-gui:latest
+    container_name: ytdl-sub-gui
+    restart: unless-stopped
+    ports:
+      - "3033:8443"  # Web interface port
+    environment:
+      - TZ=America/Chicago
+      - PUID=0
+      - PGID=0
+    volumes:
+      - ./ytdl-sub-config:/config
+      - ./ytdl-sub-working:/working
+      - /music:/music
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ytdl-sub:
+    image: ghcr.io/jmbannon/ytdl-sub:latest
+    container_name: ytdl-sub
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      - PUID=0
+      - PGID=0
+      # Automation settings
+      - CRON_SCHEDULE="0 */3 * * *"  # Every 3 hours
+      - CRON_RUN_ON_START=false
+    volumes:
+      - ./ytdl-sub-config:/config
+      - ./ytdl-sub-working:/working
+      - /music:/music
+    depends_on:
+      - ytdl-sub-gui
+
+  music-discovery-ui:
+    build: ./music-discovery-ui
+    container_name: music-discovery-ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./ytdl-sub-config:/config
+      - /music:/music
+    depends_on:
+      - ytdl-sub
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
