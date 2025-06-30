@@ -1,3 +1,4 @@
+# Update your Dockerfile to ensure all files are copied
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -24,8 +25,8 @@ RUN pip install yt-dlp
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy application
-COPY app.py .
+# FIXED: Copy all application files and directories
+COPY . .
 
 # Expose port
 EXPOSE 8501
