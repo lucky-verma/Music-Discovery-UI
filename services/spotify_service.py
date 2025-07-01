@@ -16,7 +16,7 @@ class SpotifyService:
         self.base_url = "https://api.spotify.com/v1"
         self.auth_url = "https://accounts.spotify.com/api/token"
         self.authorize_url = "https://accounts.spotify.com/authorize"
-        self.redirect_uri = "http://localhost:8501"  # For local development
+        self.redirect_uri = "http://127.0.0.1:8501"  # For local development
 
     def set_credentials(self, client_id: str, client_secret: str):
         """Set and save Spotify credentials"""
