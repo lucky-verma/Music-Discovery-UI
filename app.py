@@ -642,7 +642,7 @@ def main():
                                 # Album art
                                 if track.get("thumbnail"):
                                     st.image(
-                                        track["thumbnail"], width=140
+                                        track["thumbnail"], width=200
                                     )  # Increased size
 
                                 # Track info with better spacing
@@ -1071,7 +1071,7 @@ def main():
                                     track = spotify_results[i + j]
                                     with col:
                                         if track.get("album_art"):
-                                            st.image(track["album_art"], width=140)
+                                            st.image(track["album_art"], width=200)
 
                                         st.markdown(f"**{track['name'][:25]}**")
                                         st.caption(
