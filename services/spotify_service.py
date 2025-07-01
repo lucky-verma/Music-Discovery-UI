@@ -265,3 +265,111 @@ class SpotifyService:
         except Exception as e:
             st.error(f"Error fetching recommendations: {str(e)}")
             return []
+
+    def get_liked_tracks(self, limit=100):
+        """Fetch user's liked (saved) tracks from Spotify"""
+        headers = self._get_headers()
+        if not headers:
+            return []
+
+        tracks = []
+        offset = 0
+
+        while len(tracks) < limit:
+            params = {
+                "limit": min(50, limit - len(tracks)),
+                "offset": offset,
+                "market": "US",
+            }
+
+            try:
+                response = requests.get(
+                    f"{self.base_url}/me/tracks", headers=headers, params=params
+                )
+
+                if response.status_code != 200:
+                    break
+
+                data = response.json()
+                items = data.get("items", [])
+
+                if not items:
+                    break
+
+                for item in items:
+                    track = item["track"]
+                    tracks.append(
+                        {
+                            "id": track["id"],
+                            "name": track["name"],
+                            "artists": [a["name"] for a in track["artists"]],
+                            "album": track["album"]["name"],
+                            "album_art": (
+                                track["album"]["images"][0]["url"]
+                                if track["album"]["images"]
+                                else None
+                            ),
+                            "search_query": f"{', '.join([a['name'] for a in track['artists']])} {track['name']}",
+                        }
+                    )
+
+                if len(items) < 50:
+                    break
+
+                offset += 50
+
+            except Exception as e:
+                st.error(f"Error fetching liked tracks: {str(e)}")
+                break
+
+        return tracks
+
+    def get_user_playlists(self, limit=20):
+        """Fetch user's playlists from Spotify"""
+        headers = self._get_headers()
+        if not headers:
+            return []
+
+        playlists = []
+        offset = 0
+
+        while len(playlists) < limit:
+            params = {"limit": min(50, limit - len(playlists)), "offset": offset}
+
+            try:
+                response = requests.get(
+                    f"{self.base_url}/me/playlists", headers=headers, params=params
+                )
+
+                if response.status_code != 200:
+                    break
+
+                data = response.json()
+                items = data.get("items", [])
+
+                if not items:
+                    break
+
+                for item in items:
+                    playlists.append(
+                        {
+                            "id": item["id"],
+                            "name": item["name"],
+                            "description": item["description"],
+                            "image": (
+                                item["images"][0]["url"] if item["images"] else None
+                            ),
+                            "tracks_total": item["tracks"]["total"],
+                        }
+                    )
+
+                if len(items) < 50:
+                    break
+
+                offset += 50
+
+            except Exception as e:
+                st.error(f"Error fetching playlists: {str(e)}")
+                break
+
+        return playlists

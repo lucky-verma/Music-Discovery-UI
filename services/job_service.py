@@ -145,14 +145,14 @@ class JobManager:
             self._add_to_history(job_id, "error")
 
     def _download_single_song(self, job_id: str, url: str, metadata: Dict) -> bool:
-        """Download a single song using Docker exec"""
         try:
             self.update_job(job_id, "running", 10, "Processing URL...")
 
-            # Handle YouTube Music URLs
-            processed_url = self._process_url(url)
+            # Use search query if present
+            search_query = metadata.get("search_query")
+            if search_query:
+                url = f"ytsearch1:{search_query}"
 
-            # Create output path
             artist = metadata.get("artist", "")
             album = metadata.get("album", "")
 
@@ -165,11 +165,7 @@ class JobManager:
 
             self.update_job(job_id, "running", 30, "Downloading audio...")
 
-            # Build yt-dlp command
             cmd = [
-                "docker",
-                "exec",
-                "ytdl-sub",
                 "yt-dlp",
                 "--extract-audio",
                 "--audio-format",
@@ -182,18 +178,14 @@ class JobManager:
                 "--output",
                 output_template,
                 "--no-warnings",
-                processed_url,
+                url,
             ]
 
-            # Execute download
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
             if result.returncode == 0:
                 self.update_job(job_id, "running", 80, "Triggering library scan...")
-
-                # Trigger Navidrome rescan
                 self._trigger_navidrome_scan()
-
                 self.update_job(job_id, "running", 95, "Finalizing...")
                 return True
             else:
@@ -222,9 +214,6 @@ class JobManager:
             self.update_job(job_id, "running", 15, "Starting playlist download...")
 
             cmd = [
-                "docker",
-                "exec",
-                "ytdl-sub",
                 "yt-dlp",
                 "--extract-audio",
                 "--audio-format",

@@ -10,7 +10,6 @@ import uuid
 import re
 from urllib.parse import urlparse, parse_qs
 
-# Import services (FIXED: Now actually using the services)
 from services.spotify_service import SpotifyService
 from services.youtube_service import YouTubeService
 from services.job_service import JobManager
@@ -647,7 +646,7 @@ def main():
                         st.rerun()
 
     with tab2:
-        # NEW: Spotify Sync Tab
+        # IMPLEMENTED: Spotify Sync Tab
         st.header("🎵 Spotify Library Sync")
 
         st.markdown('<div class="spotify-section">', unsafe_allow_html=True)
@@ -690,21 +689,148 @@ def main():
 
             st.markdown("### 📚 Your Spotify Library")
 
-            # Sync options
+            # IMPLEMENTED: Sync options
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("📥 Sync Saved Tracks", use_container_width=True):
                     with st.spinner("Fetching your saved tracks..."):
-                        # This would need implementation in SpotifyService
-                        st.info("Feature coming soon! Will sync your liked songs.")
+                        try:
+                            # Get liked tracks from Spotify
+                            liked_tracks = app.spotify_service.get_liked_tracks(
+                                limit=100
+                            )
+
+                            if liked_tracks:
+                                st.info(
+                                    f"Found {len(liked_tracks)} liked tracks. Queuing for download..."
+                                )
+
+                                # Queue each track for download
+                                for track in liked_tracks:
+                                    search_query = track["search_query"]
+                                    job_id = app.job_manager.add_job(
+                                        "single_song",
+                                        f"ytsearch1:{search_query}",
+                                        {
+                                            "artist": ", ".join(track["artists"]),
+                                            "album": track["album"],
+                                            "spotify_track": True,
+                                            "search_query": search_query,
+                                        },
+                                    )
+
+                                st.success(
+                                    f"✅ Queued {len(liked_tracks)} liked tracks for download!"
+                                )
+                                st.info(
+                                    "Check the Download Status tab to monitor progress."
+                                )
+                            else:
+                                st.warning(
+                                    "No liked tracks found or you need Spotify Premium for this feature."
+                                )
+
+                        except Exception as e:
+                            st.error(f"Error fetching liked tracks: {str(e)}")
 
             with col2:
                 if st.button("📋 Sync Playlists", use_container_width=True):
                     with st.spinner("Fetching your playlists..."):
-                        # This would need implementation in SpotifyService
-                        st.info("Feature coming soon! Will sync your playlists.")
+                        try:
+                            # Get user playlists from Spotify
+                            playlists = app.spotify_service.get_user_playlists(limit=20)
 
-            # Search Spotify library
+                            if playlists:
+                                st.success(f"Found {len(playlists)} playlists!")
+
+                                # Store in session state for selection
+                                st.session_state.spotify_playlists = playlists
+                                st.info("Select playlists below to sync.")
+                            else:
+                                st.warning(
+                                    "No playlists found or you need Spotify Premium for this feature."
+                                )
+
+                        except Exception as e:
+                            st.error(f"Error fetching playlists: {str(e)}")
+
+            # IMPLEMENTED: Playlist selection and sync
+            if (
+                hasattr(st.session_state, "spotify_playlists")
+                and st.session_state.spotify_playlists
+            ):
+                st.markdown("### 📋 Select Playlists to Sync")
+
+                for playlist in st.session_state.spotify_playlists[
+                    :10
+                ]:  # Show first 10 playlists
+                    with st.expander(
+                        f"🎶 {playlist['name']} ({playlist['tracks_total']} tracks)"
+                    ):
+                        col1, col2 = st.columns([3, 1])
+
+                        with col1:
+                            st.markdown(
+                                f"**Description:** {playlist.get('description', 'No description')}"
+                            )
+                            st.markdown(f"**Tracks:** {playlist['tracks_total']}")
+
+                        with col2:
+                            if st.button(
+                                f"📥 Sync",
+                                key=f"sync_playlist_{playlist['id']}",
+                                use_container_width=True,
+                            ):
+                                with st.spinner(
+                                    f"Syncing playlist '{playlist['name']}'..."
+                                ):
+                                    try:
+                                        # Get tracks from the playlist
+                                        tracks = (
+                                            app.spotify_service.get_playlist_tracks(
+                                                playlist["id"], limit=200
+                                            )
+                                        )
+
+                                        if tracks:
+                                            st.info(
+                                                f"Found {len(tracks)} tracks. Queuing for download..."
+                                            )
+
+                                            # Queue each track for download
+                                            for track in tracks:
+                                                search_query = track["search_query"]
+                                                job_id = app.job_manager.add_job(
+                                                    "single_song",
+                                                    f"ytsearch1:{search_query}",
+                                                    {
+                                                        "artist": ", ".join(
+                                                            track["artists"]
+                                                        ),
+                                                        "album": track["album"],
+                                                        "playlist_name": playlist[
+                                                            "name"
+                                                        ],
+                                                        "spotify_track": True,
+                                                        "search_query": search_query,
+                                                    },
+                                                )
+
+                                            st.success(
+                                                f"✅ Queued {len(tracks)} tracks from playlist '{playlist['name']}'!"
+                                            )
+                                            st.info(
+                                                "Check the Download Status tab to monitor progress."
+                                            )
+                                        else:
+                                            st.warning(
+                                                f"No tracks found in playlist '{playlist['name']}'."
+                                            )
+
+                                    except Exception as e:
+                                        st.error(f"Error syncing playlist: {str(e)}")
+
+            # IMPLEMENTED: Search Spotify library
             st.markdown("### 🔍 Search Your Spotify Library")
             spotify_query = st.text_input(
                 "Search your Spotify tracks:", placeholder="Search your saved music..."
@@ -746,7 +872,7 @@ def main():
                                             search_query = track["search_query"]
                                             job_id = app.job_manager.add_job(
                                                 "single_song",
-                                                f"ytsearch:{search_query}",
+                                                f"ytsearch1:{search_query}",
                                                 {
                                                     "artist": (
                                                         track["artists"][0]
@@ -755,6 +881,7 @@ def main():
                                                     ),
                                                     "album": track["album"],
                                                     "spotify_track": True,
+                                                    "search_query": search_query,
                                                 },
                                             )
                                             st.success(
