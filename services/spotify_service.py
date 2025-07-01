@@ -25,25 +25,10 @@ class SpotifyService:
         return self._get_access_token()
 
     def get_auth_url(self):
-        """Generate Spotify authorization URL for user consent"""
+        """Generate simple Spotify authorization URL (no PKCE)"""
         client_id = self.config.get("spotify.client_id")
         if not client_id:
             return None
-
-        # Generate PKCE parameters for security
-        code_verifier = (
-            base64.urlsafe_b64encode(secrets.token_bytes(32))
-            .decode("utf-8")
-            .rstrip("=")
-        )
-        code_challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
-            .decode("utf-8")
-            .rstrip("=")
-        )
-
-        # Store code verifier for later use
-        self.config.set("spotify.code_verifier", code_verifier)
 
         # Required scopes for accessing user data
         scopes = [
@@ -59,20 +44,17 @@ class SpotifyService:
             "response_type": "code",
             "redirect_uri": self.redirect_uri,
             "scope": " ".join(scopes),
-            "code_challenge_method": "S256",
-            "code_challenge": code_challenge,
-            "state": secrets.token_urlsafe(16),  # CSRF protection
+            "state": secrets.token_urlsafe(16),  # CSRF protection only
         }
 
         return f"{self.authorize_url}?{urllib.parse.urlencode(params)}"
 
     def exchange_code_for_token(self, authorization_code: str):
-        """Exchange authorization code for access token"""
+        """Exchange authorization code for access token (simplified)"""
         client_id = self.config.get("spotify.client_id")
         client_secret = self.config.get("spotify.client_secret")
-        code_verifier = self.config.get("spotify.code_verifier")
 
-        if not all([client_id, client_secret, code_verifier]):
+        if not all([client_id, client_secret]):
             return False
 
         try:
@@ -86,7 +68,6 @@ class SpotifyService:
                 "redirect_uri": self.redirect_uri,
                 "client_id": client_id,
                 "client_secret": client_secret,
-                "code_verifier": code_verifier,
             }
 
             response = requests.post(self.auth_url, headers=headers, data=data)
