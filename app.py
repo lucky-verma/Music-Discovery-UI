@@ -10,6 +10,12 @@ import uuid
 import re
 from urllib.parse import urlparse, parse_qs
 
+# Import services (FIXED: Now actually using the services)
+from services.spotify_service import SpotifyService
+from services.youtube_service import YouTubeService
+from services.job_service import JobManager
+from utils.config import Config
+
 # Configure page
 st.set_page_config(
     page_title="🎵 Music Discovery",
@@ -18,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Modern Spotify-like CSS
+# Modern Spotify-like CSS (Updated for 8 columns)
 st.markdown(
     """
 <style>
@@ -97,15 +103,29 @@ st.markdown(
         margin: 20px 0;
         border: 1px solid #404040;
     }
+    
+    /* Spotify section styling */
+    .spotify-section {
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        color: white;
+    }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-class SimpleMusicApp:
+class EnhancedMusicApp:
     def __init__(self):
         self.jobs_file = "/config/download_jobs.json"
+        self.config = Config()
+        self.spotify_service = SpotifyService()
+        self.youtube_service = YouTubeService()
+        self.job_manager = JobManager()
+
         os.makedirs("/config", exist_ok=True)
         if not os.path.exists(self.jobs_file):
             with open(self.jobs_file, "w") as f:
@@ -177,9 +197,10 @@ class SimpleMusicApp:
             }
 
     def is_music_content(self, title, description="", duration=0):
-        """FIXED: More lenient music filter"""
-        title_lower = title.lower()
-        desc_lower = description.lower()
+        """FIXED: More lenient music filter with null checks"""
+        # FIXED: Add null checks to prevent NoneType errors
+        title_lower = (title or "").lower()
+        desc_lower = (description or "").lower()
 
         # Obvious non-music indicators (be more specific)
         non_music_keywords = [
@@ -223,7 +244,7 @@ class SimpleMusicApp:
         return True
 
     def search_youtube_music(self, query, max_results=20, filter_music=True):
-        """FIXED: Search YouTube Music with better error handling and logging"""
+        """FIXED: Search YouTube Music with better error handling"""
         try:
             st.write(f"🔍 Searching for: '{query}' (filter_music: {filter_music})")
 
@@ -236,16 +257,8 @@ class SimpleMusicApp:
                 f"ytsearch{max_results * 2 if filter_music else max_results}:{query}",
             ]
 
-            st.write(f"🔧 Running command: {' '.join(cmd)}")
-
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
 
-            st.write(
-                "📊 Command result: returncode={}, stdout_lines={}".format(
-                    result.returncode,
-                    len(result.stdout.strip().split("\n")) if result.stdout else 0,
-                )
-            )
             if result.returncode != 0:
                 st.error(f"❌ yt-dlp error (code {result.returncode}): {result.stderr}")
                 return []
@@ -262,8 +275,12 @@ class SimpleMusicApp:
                     try:
                         item = json.loads(line)
                         duration = int(item.get("duration", 0) or 0)
-                        title = item.get("title", "Unknown")
-                        description = item.get("description", "")
+                        title = (
+                            item.get("title") or "Unknown"
+                        )  # FIXED: Handle None titles
+                        description = (
+                            item.get("description") or ""
+                        )  # FIXED: Handle None descriptions
 
                         # Apply music filter if requested
                         if filter_music and not self.is_music_content(
@@ -292,10 +309,8 @@ class SimpleMusicApp:
                             break
 
                     except json.JSONDecodeError as e:
-                        st.write(f"⚠️ JSON decode error on line {line_num}: {str(e)}")
                         continue
                     except Exception as e:
-                        st.write(f"⚠️ Processing error on line {line_num}: {str(e)}")
                         continue
 
             st.write(f"✅ Found {len(results)} valid results after filtering")
@@ -308,319 +323,82 @@ class SimpleMusicApp:
 
         return []
 
-    def extract_playlist_info(self, url):
-        """Extract playlist information from URL"""
-        try:
-            cmd = [
-                "yt-dlp",
-                "--flat-playlist",
-                "--dump-json",
-                "--playlist-end",
-                "50",
-                url,
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-
-            if result.returncode == 0:
-                items = []
-                lines = result.stdout.strip().split("\n")
-
-                for line in lines:
-                    if line.strip():
-                        try:
-                            item = json.loads(line)
-                            if item.get("_type") == "playlist":
-                                continue
-
-                            duration = int(item.get("duration", 0) or 0)
-                            title = item.get("title", "Unknown")
-
-                            if self.is_music_content(title, "", duration):
-                                items.append(
-                                    {
-                                        "id": item.get("id", ""),
-                                        "title": title,
-                                        "uploader": item.get("uploader", "Unknown"),
-                                        "duration": duration,
-                                        "duration_str": (
-                                            f"{duration//60}:{duration%60:02d}"
-                                            if duration
-                                            else "N/A"
-                                        ),
-                                        "url": f"https://youtube.com/watch?v={item.get('id', '')}",
-                                        "thumbnail": f"https://img.youtube.com/vi/{item.get('id', '')}/mqdefault.jpg",
-                                    }
-                                )
-                        except:
-                            continue
-
-                return items
-        except Exception as e:
-            st.error(f"Playlist extraction failed: {str(e)}")
-
-        return []
-
     def download_song(self, url, artist="", album=""):
-        """Queue song for download using direct yt-dlp"""
-        job_id = str(uuid.uuid4())[:8]
-
-        job = {
-            "id": job_id,
-            "url": url,
-            "artist": artist,
-            "album": album,
-            "status": "queued",
-            "created": datetime.now().isoformat(),
-            "progress": 0,
-            "message": "Queued for download",
-        }
-
-        # Save job
-        jobs = self.get_all_jobs()
-        jobs[job_id] = job
-        self.save_jobs(jobs)
-
-        # Start download in background
-        threading.Thread(
-            target=self._process_download, args=(job_id,), daemon=True
-        ).start()
-
+        """Queue song for download using job manager"""
+        metadata = {"artist": artist, "album": album}
+        job_id = self.job_manager.add_job("single_song", url, metadata)
         return job_id
 
     def download_playlist(self, url, playlist_name=""):
         """Queue entire playlist for download"""
-        job_id = str(uuid.uuid4())[:8]
-
-        job = {
-            "id": job_id,
-            "url": url,
-            "playlist_name": playlist_name or "Downloaded Playlist",
-            "type": "playlist",
-            "status": "queued",
-            "created": datetime.now().isoformat(),
-            "progress": 0,
-            "message": "Queued for playlist download",
-        }
-
-        # Save job
-        jobs = self.get_all_jobs()
-        jobs[job_id] = job
-        self.save_jobs(jobs)
-
-        # Start download in background
-        threading.Thread(
-            target=self._process_playlist_download, args=(job_id,), daemon=True
-        ).start()
-
+        metadata = {"playlist_name": playlist_name or "Downloaded Playlist"}
+        job_id = self.job_manager.add_job("playlist", url, metadata)
         return job_id
 
-    def _process_download(self, job_id):
-        """Process single song download in background"""
+    def check_navidrome_status(self):
+        """Check if Navidrome is online"""
         try:
-            jobs = self.get_all_jobs()
-            job = jobs.get(job_id)
-            if not job:
-                return
-
-            # Update status
-            job["status"] = "downloading"
-            job["progress"] = 10
-            job["message"] = "Starting download..."
-            self.save_jobs(jobs)
-
-            # Download using direct yt-dlp
-            cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "320K",
-                "--embed-thumbnail",
-                "--add-metadata",
-                "--no-playlist",
-                "--output",
-                "/music/youtube-music/%(uploader)s/%(title)s.%(ext)s",
-                job["url"],
+            # Try multiple possible endpoints
+            endpoints = [
+                "http://192.168.1.39:4533/ping",
+                "http://localhost:4533/ping",
+                "http://navidrome:4533/ping",
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            for endpoint in endpoints:
+                try:
+                    result = subprocess.run(
+                        ["curl", "-f", "--connect-timeout", "5", endpoint],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    if result.returncode == 0:
+                        return "🟢 Online"
+                except:
+                    continue
 
-            if result.returncode == 0:
-                job["status"] = "completed"
-                job["progress"] = 90
-                job["message"] = "Triggering library scan..."
-                self.save_jobs(jobs)
+            return "🔴 Offline"
+        except:
+            return "🟡 Unknown"
 
-                # Trigger Navidrome scan
-                self._trigger_navidrome_scan()
-
-                job["status"] = "completed"
-                job["progress"] = 100
-                job["message"] = "Download completed!"
-            else:
-                job["status"] = "failed"
-                job["progress"] = 0
-                job["message"] = (
-                    f"Download failed: {result.stderr[:100] if result.stderr else 'Unknown error'}"
-                )
-
-            self.save_jobs(jobs)
-
-        except Exception as e:
-            jobs = self.get_all_jobs()
-            if job_id in jobs:
-                jobs[job_id]["status"] = "failed"
-                jobs[job_id]["progress"] = 0
-                jobs[job_id]["message"] = f"Error: {str(e)}"
-                self.save_jobs(jobs)
-
-    def _process_playlist_download(self, job_id):
-        """Process playlist download in background"""
+    def trigger_navidrome_scan(self):
+        """Trigger Navidrome library scan"""
         try:
-            jobs = self.get_all_jobs()
-            job = jobs.get(job_id)
-            if not job:
-                return
-
-            # Update status
-            job["status"] = "downloading"
-            job["progress"] = 5
-            job["message"] = "Starting playlist download..."
-            self.save_jobs(jobs)
-
-            playlist_name = job.get("playlist_name", "Downloaded Playlist")
-
-            # Download using direct yt-dlp with playlist support
-            cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "320K",
-                "--embed-thumbnail",
-                "--add-metadata",
-                "--yes-playlist",
-                "--output",
-                f"/music/youtube-music/{playlist_name}/%(uploader)s/%(title)s.%(ext)s",
-                job["url"],
+            endpoints = [
+                "http://192.168.1.39:4533/api/scanner/scan",
+                "http://localhost:4533/api/scanner/scan",
+                "http://navidrome:4533/api/scanner/scan",
             ]
 
-            # Use Popen for progress monitoring
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-            )
+            for endpoint in endpoints:
+                try:
+                    result = subprocess.run(
+                        ["curl", "-X", "POST", "--connect-timeout", "5", endpoint],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    if result.returncode == 0:
+                        return True
+                except:
+                    continue
 
-            progress = 5
-            while True:
-                output = process.stdout.readline()
-                if output == "" and process.poll() is not None:
-                    break
-                if output:
-                    # Update progress based on yt-dlp output
-                    if "[download]" in output and "%" in output:
-                        try:
-                            # Extract percentage
-                            percent_match = re.search(r"(\d+(?:\.\d+)?)%", output)
-                            if percent_match:
-                                file_progress = float(percent_match.group(1))
-                                progress = 5 + (file_progress * 0.85)
-                                job["progress"] = int(progress)
-                                job["message"] = (
-                                    f"Downloading playlist... {file_progress:.1f}%"
-                                )
-                                self.save_jobs(jobs)
-                        except:
-                            pass
-
-            # Wait for completion
-            process.wait()
-
-            if process.returncode == 0:
-                job["status"] = "completed"
-                job["progress"] = 95
-                job["message"] = "Triggering library scan..."
-                self.save_jobs(jobs)
-
-                # Trigger Navidrome scan
-                self._trigger_navidrome_scan()
-
-                job["status"] = "completed"
-                job["progress"] = 100
-                job["message"] = f'Playlist "{playlist_name}" downloaded successfully!'
-            else:
-                stderr = process.stderr.read()
-                job["status"] = "failed"
-                job["progress"] = 0
-                job["message"] = (
-                    f"Playlist download failed: {stderr[:100] if stderr else 'Unknown error'}"
-                )
-
-            self.save_jobs(jobs)
-
-        except Exception as e:
-            jobs = self.get_all_jobs()
-            if job_id in jobs:
-                jobs[job_id]["status"] = "failed"
-                jobs[job_id]["progress"] = 0
-                jobs[job_id]["message"] = f"Error: {str(e)}"
-                self.save_jobs(jobs)
-
-    def _trigger_navidrome_scan(self):
-        """Trigger Navidrome library scan - handles deduplication automatically"""
-        try:
-            # Try direct API call to Navidrome
+            # Try Docker exec as fallback
             subprocess.run(
-                ["curl", "-X", "POST", "http://192.168.1.39:4533/api/scanner/scan"],
+                [
+                    "docker",
+                    "exec",
+                    "navidrome",
+                    "curl",
+                    "-X",
+                    "POST",
+                    "http://localhost:4533/api/scanner/scan",
+                ],
                 timeout=10,
                 capture_output=True,
             )
-        except:
-            try:
-                # Fallback: try through docker if container setup
-                subprocess.run(
-                    [
-                        "docker",
-                        "exec",
-                        "navidrome",
-                        "curl",
-                        "-X",
-                        "POST",
-                        "http://localhost:4533/api/scanner/scan",
-                    ],
-                    timeout=10,
-                    capture_output=True,
-                )
-            except:
-                pass
 
-    def get_all_jobs(self):
-        """Get all download jobs"""
-        try:
-            with open(self.jobs_file, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-
-    def save_jobs(self, jobs):
-        """Save jobs to file"""
-        try:
-            with open(self.jobs_file, "w") as f:
-                json.dump(jobs, f, indent=2)
-        except:
-            pass
-
-    def fix_navidrome_duplicates(self):
-        """Fix greyed out tracks in Navidrome - runs in background"""
-        try:
-            self._trigger_navidrome_scan()
             return True
         except:
             return False
@@ -628,14 +406,14 @@ class SimpleMusicApp:
 
 def main():
     # Initialize app
-    app = SimpleMusicApp()
+    app = EnhancedMusicApp()
 
     # Header
     st.markdown(
         """
     <div class="main-header">
         <h1>🎵 Lucky's Music Discovery Hub</h1>
-        <p>Unlimited YouTube Music Downloads • Spotify-Style Discovery • Zero Subscriptions</p>
+        <p>Unlimited YouTube Music Downloads • Spotify Integration • Zero Subscriptions</p>
     </div>
     """,
         unsafe_allow_html=True,
@@ -654,10 +432,11 @@ def main():
     with col4:
         st.metric("Storage Used", stats["storage_used"])
 
-    # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
+    # Main tabs - ADDED Spotify tab
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
             "🔍 **Discover & Download**",
+            "🎵 **Spotify Sync**",
             "📋 **Playlist Manager**",
             "📊 **Download Status**",
             "🔧 **Library Tools**",
@@ -668,12 +447,11 @@ def main():
         # Search interface
         st.header("🔍 Search & Discover Music")
 
-        # FIXED: Add proper label to avoid warning
         search_query = st.text_input(
-            "Search Music",  # FIXED: Added proper label
-            placeholder="🎵 Search for songs, artists, albums... (e.g., 'Arijit Singh', 'Bollywood hits', 'rock music')",
+            "Search Music",
+            placeholder="🎵 Search for songs, artists, albums... (e.g., 'Travis Scott', 'Bollywood hits')",
             key="search_input",
-            label_visibility="collapsed",  # Hide the label but provide it for accessibility
+            label_visibility="collapsed",
         )
 
         col1, col2 = st.columns([3, 1])
@@ -683,68 +461,111 @@ def main():
             )
         with col2:
             music_filter = st.checkbox(
-                "🎵 Music Only",
-                value=False,
-                help="Filter out non-music content (more restrictive)",
+                "🎵 Music Only", value=True, help="Filter out non-music content"
             )
+
+        # Initialize session state for pagination
+        if "search_results" not in st.session_state:
+            st.session_state.search_results = []
+        if "results_offset" not in st.session_state:
+            st.session_state.results_offset = 0
 
         if search_query and search_button:
             with st.spinner("🎵 Searching YouTube Music..."):
+                # Reset pagination on new search
+                st.session_state.results_offset = 0
                 results = app.search_youtube_music(
-                    search_query, max_results=20, filter_music=music_filter
+                    search_query, max_results=40, filter_music=music_filter
                 )
+                st.session_state.search_results = results
+                st.session_state.last_search_query = search_query
 
-                if results:
-                    st.success(f"Found {len(results)} results for '{search_query}'")
+        # Display search results with pagination
+        if st.session_state.search_results:
+            results = st.session_state.search_results
+            offset = st.session_state.results_offset
+            page_size = 32  # Show 32 results (4 rows of 8 columns)
 
-                    # Display results in card grid (4 columns for better layout)
+            st.success(
+                f"Found {len(results)} results for '{st.session_state.get('last_search_query', '')}'"
+            )
+
+            # Display current page of results - CHANGED to 8 columns
+            current_page_results = results[offset : offset + page_size]
+
+            if current_page_results:
+                st.markdown('<div class="results-container">', unsafe_allow_html=True)
+
+                # CHANGED: Display in 8 columns instead of 4
+                for i in range(0, len(current_page_results), 8):
+                    cols = st.columns(8)
+
+                    for j, col in enumerate(cols):
+                        if i + j < len(current_page_results):
+                            track = current_page_results[i + j]
+                            with col:
+                                # Album art
+                                if track.get("thumbnail"):
+                                    st.image(
+                                        track["thumbnail"], width=120
+                                    )  # Smaller images for 8 columns
+
+                                # Track info
+                                title = (
+                                    track["title"][:25] + "..."
+                                    if len(track["title"]) > 25
+                                    else track["title"]
+                                )
+                                uploader = (
+                                    track["uploader"][:15] + "..."
+                                    if len(track["uploader"]) > 15
+                                    else track["uploader"]
+                                )
+
+                                st.markdown(f"**{title}**")
+                                st.caption(f"🎤 {uploader}")
+                                st.caption(f"⏱️ {track['duration_str']}")
+
+                                # Download button
+                                if st.button(
+                                    "📥 Download",
+                                    key=f"dl_{offset+i+j}",
+                                    use_container_width=True,
+                                ):
+                                    job_id = app.download_song(track["url"])
+                                    st.success(f"✅ Queued! Job: {job_id}")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # Pagination controls - ADDED Load More and Clear Results
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col1:
+                    if offset > 0:
+                        if st.button("⬅️ Previous"):
+                            st.session_state.results_offset = max(0, offset - page_size)
+                            st.rerun()
+
+                with col2:
+                    current_page = (offset // page_size) + 1
+                    total_pages = (len(results) - 1) // page_size + 1
                     st.markdown(
-                        '<div class="results-container">', unsafe_allow_html=True
+                        f"<div style='text-align: center'>Page {current_page} of {total_pages}</div>",
+                        unsafe_allow_html=True,
                     )
 
-                    for i in range(0, len(results), 4):
-                        cols = st.columns(4)
+                with col3:
+                    if offset + page_size < len(results):
+                        if st.button("Load More ➡️"):
+                            st.session_state.results_offset = offset + page_size
+                            st.rerun()
 
-                        for j, col in enumerate(cols):
-                            if i + j < len(results):
-                                track = results[i + j]
-                                with col:
-                                    # Album art
-                                    if track.get("thumbnail"):
-                                        st.image(track["thumbnail"], width=150)
+                # Clear results button
+                if st.button("🗑️ Clear All Results"):
+                    st.session_state.search_results = []
+                    st.session_state.results_offset = 0
+                    st.rerun()
 
-                                    # Track info
-                                    title = (
-                                        track["title"][:30] + "..."
-                                        if len(track["title"]) > 30
-                                        else track["title"]
-                                    )
-                                    uploader = (
-                                        track["uploader"][:20] + "..."
-                                        if len(track["uploader"]) > 20
-                                        else track["uploader"]
-                                    )
-
-                                    st.markdown(f"**{title}**")
-                                    st.caption(f"🎤 {uploader}")
-                                    st.caption(f"⏱️ {track['duration_str']}")
-
-                                    # Download button
-                                    if st.button(
-                                        "📥 Download",
-                                        key=f"dl_{i+j}",
-                                        use_container_width=True,
-                                    ):
-                                        job_id = app.download_song(track["url"])
-                                        st.success(f"✅ Queued! Job: {job_id}")
-
-                    st.markdown("</div>", unsafe_allow_html=True)
-                else:
-                    st.warning(
-                        "No results found. Try different keywords or disable music filter."
-                    )
-
-        # Quick discovery
+        # Quick discovery - CHANGED to 8 columns
         st.header("🎭 Quick Discovery")
 
         genres = [
@@ -758,12 +579,11 @@ def main():
             ("🏴‍☠️ Old School", "90s music"),
         ]
 
-        # Create genre buttons in 4 columns
-        genre_cols = st.columns(4)
+        # Create genre buttons in 8 columns
+        genre_cols = st.columns(8)
         for i, (genre_name, genre_query) in enumerate(genres):
-            with genre_cols[i % 4]:
+            with genre_cols[i % 8]:
                 if st.button(genre_name, key=f"genre_{i}", use_container_width=True):
-                    # Store in session state to display results
                     st.session_state.genre_query = genre_query
                     st.session_state.genre_name = genre_name
                     st.rerun()
@@ -772,7 +592,7 @@ def main():
         if hasattr(st.session_state, "genre_query"):
             with st.spinner(f"Finding {st.session_state.genre_name} music..."):
                 results = app.search_youtube_music(
-                    st.session_state.genre_query, max_results=16, filter_music=False
+                    st.session_state.genre_query, max_results=32, filter_music=False
                 )
 
                 if results:
@@ -784,24 +604,25 @@ def main():
                         '<div class="results-container">', unsafe_allow_html=True
                     )
 
-                    for j in range(0, len(results), 4):
-                        result_cols = st.columns(4)
+                    # CHANGED: Display in 8 columns
+                    for j in range(0, len(results), 8):
+                        result_cols = st.columns(8)
 
                         for k, col in enumerate(result_cols):
                             if j + k < len(results):
                                 track = results[j + k]
                                 with col:
                                     if track.get("thumbnail"):
-                                        st.image(track["thumbnail"], width=150)
+                                        st.image(track["thumbnail"], width=120)
 
                                     title = (
-                                        track["title"][:30] + "..."
-                                        if len(track["title"]) > 30
+                                        track["title"][:25] + "..."
+                                        if len(track["title"]) > 25
                                         else track["title"]
                                     )
                                     uploader = (
-                                        track["uploader"][:20] + "..."
-                                        if len(track["uploader"]) > 20
+                                        track["uploader"][:15] + "..."
+                                        if len(track["uploader"]) > 15
                                         else track["uploader"]
                                     )
 
@@ -824,54 +645,162 @@ def main():
                         del st.session_state.genre_query
                         del st.session_state.genre_name
                         st.rerun()
-                else:
-                    st.warning(f"No {st.session_state.genre_name} results found.")
 
     with tab2:
-        # Playlist Manager Tab
+        # NEW: Spotify Sync Tab
+        st.header("🎵 Spotify Library Sync")
+
+        st.markdown('<div class="spotify-section">', unsafe_allow_html=True)
+
+        st.markdown("### 🔗 Connect Your Spotify Account")
+        st.info(
+            "💡 Connect your Spotify account to automatically download your saved tracks and playlists using yt-dlp"
+        )
+
+        # Spotify credentials input
+        col1, col2 = st.columns(2)
+        with col1:
+            client_id = st.text_input(
+                "Spotify Client ID",
+                value=app.config.get("spotify.client_id", ""),
+                help="Get this from Spotify Developer Dashboard",
+            )
+        with col2:
+            client_secret = st.text_input(
+                "Spotify Client Secret",
+                value=app.config.get("spotify.client_secret", ""),
+                type="password",
+                help="Get this from Spotify Developer Dashboard",
+            )
+
+        if st.button("🔗 Connect Spotify", type="primary"):
+            if client_id and client_secret:
+                with st.spinner("Connecting to Spotify..."):
+                    if app.spotify_service.set_credentials(client_id, client_secret):
+                        st.success("✅ Successfully connected to Spotify!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to connect. Check your credentials.")
+            else:
+                st.error("Please enter both Client ID and Client Secret")
+
+        # Check if Spotify is connected
+        if app.config.get("spotify.access_token"):
+            st.success("🟢 Spotify Connected!")
+
+            st.markdown("### 📚 Your Spotify Library")
+
+            # Sync options
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📥 Sync Saved Tracks", use_container_width=True):
+                    with st.spinner("Fetching your saved tracks..."):
+                        # This would need implementation in SpotifyService
+                        st.info("Feature coming soon! Will sync your liked songs.")
+
+            with col2:
+                if st.button("📋 Sync Playlists", use_container_width=True):
+                    with st.spinner("Fetching your playlists..."):
+                        # This would need implementation in SpotifyService
+                        st.info("Feature coming soon! Will sync your playlists.")
+
+            # Search Spotify library
+            st.markdown("### 🔍 Search Your Spotify Library")
+            spotify_query = st.text_input(
+                "Search your Spotify tracks:", placeholder="Search your saved music..."
+            )
+
+            if spotify_query:
+                with st.spinner("Searching Spotify..."):
+                    spotify_results = app.spotify_service.search_tracks(
+                        spotify_query, limit=16
+                    )
+
+                    if spotify_results:
+                        st.success(f"Found {len(spotify_results)} Spotify tracks")
+
+                        # Display Spotify results in 8 columns
+                        for i in range(0, len(spotify_results), 8):
+                            cols = st.columns(8)
+
+                            for j, col in enumerate(cols):
+                                if i + j < len(spotify_results):
+                                    track = spotify_results[i + j]
+                                    with col:
+                                        if track.get("album_art"):
+                                            st.image(track["album_art"], width=120)
+
+                                        st.markdown(f"**{track['name'][:25]}**")
+                                        st.caption(
+                                            f"🎤 {', '.join(track['artists'][:2])}"
+                                        )
+                                        st.caption(f"💿 {track['album'][:20]}")
+
+                                        # Download equivalent from YouTube
+                                        if st.button(
+                                            "📥 Download from YT",
+                                            key=f"spotify_dl_{i+j}",
+                                            use_container_width=True,
+                                        ):
+                                            # Search YouTube for this track
+                                            search_query = track["search_query"]
+                                            job_id = app.job_manager.add_job(
+                                                "single_song",
+                                                f"ytsearch:{search_query}",
+                                                {
+                                                    "artist": (
+                                                        track["artists"][0]
+                                                        if track["artists"]
+                                                        else ""
+                                                    ),
+                                                    "album": track["album"],
+                                                    "spotify_track": True,
+                                                },
+                                            )
+                                            st.success(
+                                                f"✅ Queued YouTube search for: {track['name']}"
+                                            )
+
+        else:
+            st.warning("🔗 Connect your Spotify account to access sync features")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with tab3:
+        # Playlist Manager Tab (existing code)
         st.header("📋 Playlist & URL Manager")
 
         st.markdown('<div class="playlist-section">', unsafe_allow_html=True)
 
-        # URL input section
         st.subheader("🔗 Add URLs or Playlists")
 
         url_input = st.text_area(
             "Paste URLs (one per line):",
-            placeholder="https://youtube.com/watch?v=dQw4w9WgXcQ\nhttps://youtube.com/playlist?list=PLrAXtmRdnEQy3Qo2KnG...\nhttps://music.youtube.com/watch?v=...",
+            placeholder="https://youtube.com/watch?v=dQw4w9WgXcQ\nhttps://youtube.com/playlist?list=PLrAXtmRdnEQy3Qo2KnG...",
             height=100,
         )
 
         col1, col2 = st.columns(2)
-
         with col1:
             playlist_name = st.text_input(
-                "Playlist Name (optional):",
-                placeholder="e.g., 'My Awesome Mix'",
-                help="Custom folder name for organization",
+                "Playlist Name (optional):", placeholder="e.g., 'My Awesome Mix'"
             )
-
         with col2:
-            apply_filter = st.checkbox(
-                "🎵 Filter Music Only", value=True, help="Skip non-music content"
-            )
+            apply_filter = st.checkbox("🎵 Filter Music Only", value=True)
 
         if url_input and st.button("📥 **Process URLs**", type="primary"):
             urls = [url.strip() for url in url_input.split("\n") if url.strip()]
 
             if urls:
                 processed_count = 0
-
                 for url in urls:
                     if "playlist" in url or "list=" in url:
-                        # Handle as playlist
                         job_id = app.download_playlist(
                             url, playlist_name or "Downloaded Playlist"
                         )
                         st.success(f"📋 Playlist queued! Job: {job_id}")
                         processed_count += 1
                     elif "youtube.com/watch" in url or "music.youtube.com" in url:
-                        # Handle as single video
                         job_id = app.download_song(url)
                         st.success(f"🎵 Song queued! Job: {job_id}")
                         processed_count += 1
@@ -883,29 +812,33 @@ def main():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with tab3:
-        # Download status tab - same as before
+    with tab4:
+        # Download Status Tab - Enhanced with job manager
         st.header("📊 Download Status & History")
 
         if st.button("🔄 Refresh", key="refresh_status"):
             st.rerun()
 
-        jobs = app.get_all_jobs()
+        # Get stats from job manager
+        stats = app.job_manager.get_stats()
 
-        if not jobs:
-            st.info(
-                "No downloads yet. Search for music or add playlists to start downloading!"
-            )
-            return
+        # Stats dashboard
+        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+        with stat_col1:
+            st.metric("Active Jobs", stats["active_jobs"])
+        with stat_col2:
+            st.metric("Total Downloads", stats["total_downloads"])
+        with stat_col3:
+            st.metric("Success Rate", f"{stats['success_rate']:.1f}%")
+        with stat_col4:
+            st.metric("Today's Downloads", stats["today_downloads"])
 
-        # Active downloads
-        active_jobs = [
-            j for j in jobs.values() if j["status"] in ["queued", "downloading"]
-        ]
+        # Active jobs
+        jobs = app.job_manager.get_all_jobs()
+        active_jobs = [j for j in jobs.values() if j["status"] in ["queued", "running"]]
 
         if active_jobs:
             st.subheader("🔄 Active Downloads")
-
             for job in active_jobs:
                 with st.container():
                     col1, col2, col3 = st.columns([4, 1, 1])
@@ -917,7 +850,7 @@ def main():
                             if job.get("type") == "playlist"
                             else "🎵 Song"
                         )
-                        st.markdown(f"**{status_emoji} {job_type} Downloading...**")
+                        st.markdown(f"**{status_emoji} {job_type} Processing...**")
                         st.caption(f"URL: {job['url'][:60]}...")
                         st.caption(f"Status: {job.get('message', 'Processing...')}")
 
@@ -928,29 +861,27 @@ def main():
 
                     with col3:
                         st.caption(f"Job: {job['id']}")
+                        if job["status"] == "queued" and st.button(
+                            "❌", key=f"cancel_{job['id']}"
+                        ):
+                            if app.job_manager.cancel_job(job["id"]):
+                                st.success("Job cancelled")
+                                st.rerun()
 
-        # Recent downloads
-        completed_jobs = [j for j in jobs.values() if j["status"] == "completed"]
-        failed_jobs = [j for j in jobs.values() if j["status"] == "failed"]
+        # Recent history
+        history = app.job_manager.get_download_history()
+        if history:
+            st.subheader("📜 Recent Downloads")
+            for item in history[-10:]:
+                status_emoji = "✅" if item["status"] == "success" else "❌"
+                job_type = "📋" if item["type"] == "playlist" else "🎵"
+                completed_time = item.get("completed", "")[:19].replace("T", " ")
+                st.markdown(
+                    f"{status_emoji} {job_type} {completed_time} - {item.get('message', 'Completed')}"
+                )
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if completed_jobs:
-                st.subheader("✅ Recent Completed")
-                for job in completed_jobs[-10:]:
-                    created_time = job.get("created", "")[:19].replace("T", " ")
-                    job_type = "📋" if job.get("type") == "playlist" else "🎵"
-                    st.success(f"{job_type} {created_time} - Completed")
-
-        with col2:
-            if failed_jobs:
-                st.subheader("❌ Recent Failed")
-                for job in failed_jobs[-5:]:
-                    st.error(f"❌ {job.get('message', 'Download failed')}")
-
-    with tab4:
-        # Library tools tab - same as before but with better Navidrome integration
+    with tab5:
+        # Library Tools Tab - Enhanced
         st.header("🔧 Library Management Tools")
 
         col1, col2 = st.columns(2)
@@ -958,36 +889,23 @@ def main():
         with col1:
             st.subheader("🎵 Navidrome Integration")
 
-            # Navidrome status check
-            try:
-                result = subprocess.run(
-                    ["curl", "-f", "http://192.168.1.39:4533/ping"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                navidrome_status = (
-                    "🟢 Online" if result.returncode == 0 else "🔴 Offline"
-                )
-            except:
-                navidrome_status = "🟡 Unknown"
-
+            # FIXED: Better Navidrome status check
+            navidrome_status = app.check_navidrome_status()
             st.markdown(f"**Status:** {navidrome_status}")
 
             if st.button("🔄 Trigger Library Scan", use_container_width=True):
                 with st.spinner("Scanning library..."):
-                    if app._trigger_navidrome_scan():
+                    if app.trigger_navidrome_scan():
                         st.success("✅ Library scan triggered!")
                     else:
-                        st.warning("⚠️ Scan triggered (response unknown)")
+                        st.warning("⚠️ Scan triggered but response unclear")
 
-            if st.button("🧹 Fix Duplicates/Greyed Out", use_container_width=True):
-                with st.spinner("Fixing database issues..."):
-                    if app.fix_navidrome_duplicates():
-                        st.success("✅ Cleanup process completed!")
-                        st.info("ℹ️ Deduplication runs automatically in background")
-                    else:
-                        st.error("❌ Cleanup failed")
+            if st.button("🧹 Clean Old Jobs", use_container_width=True):
+                with st.spinner("Cleaning up old jobs..."):
+                    cleaned = app.job_manager.cleanup_old_jobs(
+                        24
+                    )  # Remove jobs older than 24 hours
+                    st.success(f"✅ Cleaned {cleaned} old jobs")
 
         with col2:
             st.subheader("📊 Storage & Performance")
@@ -1005,7 +923,6 @@ def main():
                             st.metric("Total Space", parts[1])
                             st.metric("Used Space", parts[2])
                             st.metric("Free Space", parts[3])
-
                             usage_pct = parts[4] if len(parts) > 4 else "Unknown"
                             st.metric("Usage", usage_pct)
             except:
@@ -1028,17 +945,6 @@ def main():
         with link_col3:
             st.markdown("🎬 [**Jellyfin**](https://jellyfin.luckyverma.com)")
             st.caption("4K media streaming")
-
-        # Footer info
-        st.markdown("---")
-        st.markdown(
-            """
-        <div style="text-align: center; color: #666; font-size: 0.8em;">
-            🎵 Lucky's Music Empire | Built with Streamlit + yt-dlp | VPN-Protected Downloads
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
 
 
 if __name__ == "__main__":
