@@ -8,20 +8,21 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import threading
 import uuid
+import hashlib
 
 # Configure page
 st.set_page_config(
-    page_title="🎵 Music Discovery Hub",
+    page_title="🎵 Music Discovery",
     page_icon="🎵",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# Modern CSS styling (Spotify-inspired)
+# Modern Spotify-like CSS
 st.markdown(
     """
 <style>
-    /* Hide Streamlit elements */
+    /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     .stDeployButton {display:none;}
     footer {visibility: hidden;}
@@ -34,9 +35,9 @@ st.markdown(
         max-width: 100%;
     }
     
-    /* Dark theme */
+    /* Dark Spotify theme */
     .stApp {
-        background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+        background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
         color: #ffffff;
     }
     
@@ -47,15 +48,22 @@ st.markdown(
         border-radius: 12px;
         margin-bottom: 20px;
         text-align: center;
+        box-shadow: 0 4px 20px rgba(29, 185, 84, 0.3);
     }
     
-    /* Search bar styling */
-    .search-container {
-        background: #2a2a2a;
-        border-radius: 25px;
-        padding: 10px 20px;
-        margin: 20px 0;
+    /* Search styling */
+    .stTextInput > div > div > input {
+        background-color: #2a2a2a;
         border: 2px solid #404040;
+        border-radius: 25px;
+        color: white;
+        padding: 12px 20px;
+        font-size: 16px;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #1DB954;
+        box-shadow: 0 0 10px rgba(29, 185, 84, 0.3);
     }
     
     /* Music card styling */
@@ -84,6 +92,7 @@ st.markdown(
         padding: 8px 20px;
         font-weight: 600;
         transition: all 0.3s ease;
+        border: none !important;
     }
     
     .stButton > button:hover {
@@ -94,40 +103,70 @@ st.markdown(
     
     /* Metrics styling */
     .metric-card {
-        background: #2a2a2a;
-        border-radius: 8px;
-        padding: 15px;
+        background: linear-gradient(135deg, #2a2a2a, #333);
+        border-radius: 12px;
+        padding: 20px;
         text-align: center;
         border: 1px solid #404040;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     
     /* Genre buttons */
-    .genre-button {
-        background: #333;
+    .genre-btn {
+        background: linear-gradient(135deg, #333, #444);
         border: 1px solid #555;
         border-radius: 20px;
-        padding: 8px 16px;
+        padding: 10px 20px;
         margin: 5px;
         color: #fff;
-        text-decoration: none;
-        display: inline-block;
         transition: all 0.3s ease;
+    }
+    
+    .genre-btn:hover {
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        transform: translateY(-2px);
     }
     
     /* Album art styling */
     .album-art {
         border-radius: 8px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        transition: transform 0.3s ease;
     }
     
-    /* Status indicators */
-    .status-good { color: #1DB954; }
-    .status-warning { color: #FFA500; }
-    .status-error { color: #FF6B6B; }
+    .album-art:hover {
+        transform: scale(1.05);
+    }
     
     /* Progress bars */
     .stProgress > div > div > div {
         background: linear-gradient(90deg, #1DB954, #1ed760);
+    }
+    
+    /* Status indicators */
+    .status-good { color: #1DB954; font-weight: bold; }
+    .status-warning { color: #FFA500; font-weight: bold; }
+    .status-error { color: #FF6B6B; font-weight: bold; }
+    
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: #2a2a2a;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #1DB954;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #1DB954 !important;
     }
 </style>
 """,
@@ -135,7 +174,7 @@ st.markdown(
 )
 
 
-class MusicDiscoveryApp:
+class SimpleMusicApp:
     def __init__(self):
         self.jobs_file = "/config/download_jobs.json"
         self.ensure_config()
@@ -148,7 +187,7 @@ class MusicDiscoveryApp:
                 json.dump({}, f)
 
     def get_real_library_stats(self):
-        """Get actual library statistics"""
+        """Get actual library statistics from your system"""
         try:
             # Count music files
             cmd = [
@@ -185,22 +224,22 @@ class MusicDiscoveryApp:
                         used_size = parts[2]
                         free_size = parts[3]
 
-            # Count artists and albums (simplified)
+            # Count unique artists and albums from file paths
             artists = set()
             albums = set()
 
-            for file_path in files[:1000]:  # Sample first 1000 files for performance
+            for file_path in files[:500]:  # Sample for performance
                 try:
+                    # Extract from path structure: /music/youtube-music/Artist/Album/Song
                     parts = file_path.split("/")
-                    if len(parts) >= 4:  # /music/youtube-music/Artist/Album/Song
-                        if "youtube-music" in parts:
-                            artist_idx = parts.index("youtube-music") + 1
-                            if artist_idx < len(parts):
-                                artists.add(parts[artist_idx])
-                            if artist_idx + 1 < len(parts):
-                                albums.add(
-                                    f"{parts[artist_idx]}/{parts[artist_idx + 1]}"
-                                )
+                    if len(parts) >= 4 and "youtube-music" in parts:
+                        youtube_idx = parts.index("youtube-music")
+                        if youtube_idx + 1 < len(parts):
+                            artists.add(parts[youtube_idx + 1])
+                        if youtube_idx + 2 < len(parts):
+                            albums.add(
+                                f"{parts[youtube_idx + 1]}/{parts[youtube_idx + 2]}"
+                            )
                 except:
                     continue
 
@@ -213,6 +252,7 @@ class MusicDiscoveryApp:
                 "storage_free": free_size,
             }
         except Exception as e:
+            st.error(f"Error getting stats: {e}")
             return {
                 "total_tracks": 0,
                 "artists": 0,
@@ -222,7 +262,7 @@ class MusicDiscoveryApp:
                 "storage_free": "Unknown",
             }
 
-    def search_youtube_music(self, query: str, max_results: int = 10) -> List[Dict]:
+    def search_youtube_music(self, query: str, max_results: int = 12) -> List[Dict]:
         """Search YouTube Music using yt-dlp"""
         try:
             cmd = [
@@ -284,6 +324,7 @@ class MusicDiscoveryApp:
             "status": "queued",
             "created": datetime.now().isoformat(),
             "progress": 0,
+            "message": "Queued for download",
         }
 
         # Save job
@@ -309,6 +350,7 @@ class MusicDiscoveryApp:
             # Update status
             job["status"] = "downloading"
             job["progress"] = 10
+            job["message"] = "Starting download..."
             self.save_jobs(jobs)
 
             # Convert YouTube Music URL if needed
@@ -316,6 +358,11 @@ class MusicDiscoveryApp:
             if "music.youtube.com" in url and "watch?v=" in url:
                 video_id = url.split("watch?v=")[1].split("&")[0]
                 url = f"https://youtube.com/watch?v={video_id}"
+
+            # Update progress
+            job["progress"] = 30
+            job["message"] = "Downloading audio..."
+            self.save_jobs(jobs)
 
             # Download using ytdl-sub
             cmd = [
@@ -340,7 +387,9 @@ class MusicDiscoveryApp:
 
             if result.returncode == 0:
                 job["status"] = "completed"
-                job["progress"] = 100
+                job["progress"] = 90
+                job["message"] = "Triggering library scan..."
+                self.save_jobs(jobs)
 
                 # Trigger Navidrome scan
                 try:
@@ -358,10 +407,15 @@ class MusicDiscoveryApp:
                     )
                 except:
                     pass
+
+                job["status"] = "completed"
+                job["progress"] = 100
+                job["message"] = "Download completed!"
             else:
                 job["status"] = "failed"
-                job["error"] = (
-                    result.stderr[:200] if result.stderr else "Download failed"
+                job["progress"] = 0
+                job["message"] = (
+                    f"Download failed: {result.stderr[:100] if result.stderr else 'Unknown error'}"
                 )
 
             self.save_jobs(jobs)
@@ -370,7 +424,8 @@ class MusicDiscoveryApp:
             jobs = self.get_all_jobs()
             if job_id in jobs:
                 jobs[job_id]["status"] = "failed"
-                jobs[job_id]["error"] = str(e)
+                jobs[job_id]["progress"] = 0
+                jobs[job_id]["message"] = f"Error: {str(e)}"
                 self.save_jobs(jobs)
 
     def get_all_jobs(self) -> Dict:
@@ -392,8 +447,8 @@ class MusicDiscoveryApp:
     def cleanup_duplicates(self):
         """Simple duplicate cleanup for Navidrome"""
         try:
-            # Trigger Navidrome cleanup
-            subprocess.run(
+            # Trigger Navidrome cleanup scan
+            result = subprocess.run(
                 [
                     "docker",
                     "exec",
@@ -404,27 +459,29 @@ class MusicDiscoveryApp:
                     "http://localhost:4533/api/scanner/scan",
                 ],
                 timeout=30,
+                capture_output=True,
+                text=True,
             )
-            return True
+            return result.returncode == 0
         except:
             return False
 
 
 def main():
-    app = MusicDiscoveryApp()
+    app = SimpleMusicApp()
 
     # Header
     st.markdown(
         """
     <div class="main-header">
         <h1>🎵 Lucky's Music Discovery Hub</h1>
-        <p>Your Personal YouTube Music Automation Center</p>
+        <p>Unlimited YouTube Music Downloads • Spotify-Style Discovery • Zero Subscriptions</p>
     </div>
     """,
         unsafe_allow_html=True,
     )
 
-    # Stats row
+    # Real Stats Dashboard
     stats = app.get_real_library_stats()
 
     col1, col2, col3, col4 = st.columns(4)
@@ -432,8 +489,8 @@ def main():
         st.markdown(
             f"""
         <div class="metric-card">
-            <h3>🎵 {stats['total_tracks']:,}</h3>
-            <p>Total Tracks</p>
+            <h2 style="color: #1DB954; margin: 0;">🎵 {stats['total_tracks']:,}</h2>
+            <p style="margin: 5px 0 0 0; color: #ccc;">Total Tracks</p>
         </div>
         """,
             unsafe_allow_html=True,
@@ -443,8 +500,8 @@ def main():
         st.markdown(
             f"""
         <div class="metric-card">
-            <h3>🎤 {stats['artists']:,}</h3>
-            <p>Artists</p>
+            <h2 style="color: #1DB954; margin: 0;">🎤 {stats['artists']:,}</h2>
+            <p style="margin: 5px 0 0 0; color: #ccc;">Artists</p>
         </div>
         """,
             unsafe_allow_html=True,
@@ -454,8 +511,8 @@ def main():
         st.markdown(
             f"""
         <div class="metric-card">
-            <h3>💿 {stats['albums']:,}</h3>
-            <p>Albums</p>
+            <h2 style="color: #1DB954; margin: 0;">💿 {stats['albums']:,}</h2>
+            <p style="margin: 5px 0 0 0; color: #ccc;">Albums</p>
         </div>
         """,
             unsafe_allow_html=True,
@@ -465,8 +522,8 @@ def main():
         st.markdown(
             f"""
         <div class="metric-card">
-            <h3>💾 {stats['storage_used']}</h3>
-            <p>Storage Used</p>
+            <h2 style="color: #1DB954; margin: 0;">💾 {stats['storage_used']}</h2>
+            <p style="margin: 5px 0 0 0; color: #ccc;">Storage Used</p>
         </div>
         """,
             unsafe_allow_html=True,
@@ -474,8 +531,10 @@ def main():
 
     st.markdown("---")
 
-    # Main tabs
-    tab1, tab2, tab3 = st.tabs(["🔍 **Discover**", "📊 **Downloads**", "🔧 **Manage**"])
+    # Main interface
+    tab1, tab2, tab3 = st.tabs(
+        ["🔍 **Discover & Download**", "📊 **Download Status**", "🔧 **Library Tools**"]
+    )
 
     with tab1:
         render_discovery_tab(app)
@@ -484,22 +543,22 @@ def main():
         render_downloads_tab(app)
 
     with tab3:
-        render_manage_tab(app)
+        render_tools_tab(app)
 
 
 def render_discovery_tab(app):
     """Render the main discovery interface"""
 
     # Search section
-    st.markdown("### 🔍 **Search Music**")
+    st.markdown("### 🔍 **Search & Discover Music**")
 
-    search_col1, search_col2 = st.columns([3, 1])
+    search_col1, search_col2 = st.columns([4, 1])
 
     with search_col1:
         search_query = st.text_input(
             "",
-            placeholder="🎵 Search for songs, artists, albums...",
-            key="search_input",
+            placeholder="🎵 Search for songs, artists, albums... (e.g., 'Arijit Singh', 'Bollywood hits', 'rock music')",
+            key="main_search",
         )
 
     with search_col2:
@@ -510,22 +569,23 @@ def render_discovery_tab(app):
     # Quick genre discovery
     st.markdown("### 🎭 **Quick Discovery**")
 
+    # Popular genres with direct search
     genres = [
-        ("🇮🇳 Bollywood", "bollywood hits 2024"),
-        ("🎸 Rock", "rock music"),
-        ("🎤 Pop", "pop hits"),
-        ("🇰🇷 K-Pop", "kpop"),
+        ("🇮🇳 Bollywood Hits", "bollywood hits 2024"),
+        ("🎸 Rock Classics", "rock music hits"),
+        ("🎤 Pop Charts", "pop music 2024"),
+        ("🇰🇷 K-Pop", "kpop hits 2024"),
         ("🎵 Electronic", "electronic music"),
-        ("🎷 Jazz", "jazz music"),
+        ("🎷 Jazz", "jazz classics"),
         ("🎼 Classical", "classical music"),
-        ("🎺 Blues", "blues music"),
+        ("🏴‍☠️ Old School", "90s hits"),
     ]
 
     genre_cols = st.columns(4)
     for i, (genre_name, genre_query) in enumerate(genres):
         with genre_cols[i % 4]:
             if st.button(genre_name, key=f"genre_{i}", use_container_width=True):
-                st.session_state.search_input = genre_query
+                st.session_state.main_search = genre_query
                 st.rerun()
 
     # Search results
@@ -539,90 +599,92 @@ def render_discovery_tab(app):
                         f"### 🎵 **Found {len(results)} results for '{search_query}'**"
                     )
 
-                    # Display results in a clean grid
-                    for i in range(0, len(results), 2):
-                        cols = st.columns(2)
+                    # Display results in compact grid (3 columns)
+                    for i in range(0, len(results), 3):
+                        cols = st.columns(3)
 
                         for j, col in enumerate(cols):
                             if i + j < len(results):
                                 track = results[i + j]
                                 with col:
-                                    render_track_card(track, f"result_{i+j}", app)
+                                    render_compact_track_card(
+                                        track, f"result_{i+j}", app
+                                    )
                 else:
-                    st.warning("😔 No results found. Try different keywords.")
+                    st.warning(
+                        "😔 No results found. Try different keywords or check spelling."
+                    )
 
 
-def render_track_card(track, key_suffix, app):
-    """Render a modern track card"""
+def render_compact_track_card(track, key_suffix, app):
+    """Render a compact track card with album art"""
 
     with st.container():
-        # Album art and info
-        img_col, info_col, action_col = st.columns([1, 3, 1])
-
-        with img_col:
-            if track.get("thumbnail"):
-                st.image(track["thumbnail"], width=80, caption="")
-            else:
-                st.markdown(
-                    """
-                <div style="width: 80px; height: 80px; background: linear-gradient(45deg, #1DB954, #1ed760); 
-                     border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">
-                    🎵
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
-
-        with info_col:
-            title = (
-                track["title"][:40] + "..."
-                if len(track["title"]) > 40
-                else track["title"]
-            )
-            uploader = (
-                track["uploader"][:30] + "..."
-                if len(track["uploader"]) > 30
-                else track["uploader"]
-            )
-
+        # Album art
+        if track.get("thumbnail"):
+            st.image(track["thumbnail"], width=150)
+        else:
             st.markdown(
-                f"""
-            <div class="music-card">
-                <h4 style="margin: 0; color: #fff;">{title}</h4>
-                <p style="margin: 5px 0; color: #1DB954;">🎤 {uploader}</p>
-                <p style="margin: 0; color: #888; font-size: 0.9em;">⏱️ {track['duration_str']}</p>
+                """
+            <div style="width: 150px; height: 100px; background: linear-gradient(45deg, #1DB954, #1ed760); 
+                 border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em; margin-bottom: 10px;">
+                🎵
             </div>
             """,
                 unsafe_allow_html=True,
             )
 
-        with action_col:
-            if st.button(
-                "📥",
-                key=f"download_{key_suffix}",
-                help="Download",
-                use_container_width=True,
-            ):
-                job_id = app.download_song(track["url"])
-                st.success(f"✅ Download started! Job: {job_id}")
-                time.sleep(1)
-                st.rerun()
+        # Track info
+        title = (
+            track["title"][:35] + "..." if len(track["title"]) > 35 else track["title"]
+        )
+        uploader = (
+            track["uploader"][:25] + "..."
+            if len(track["uploader"]) > 25
+            else track["uploader"]
+        )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+        <div style="padding: 5px 0;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 3px; color: #fff;">
+                {title}
+            </div>
+            <div style="color: #1DB954; font-size: 12px; margin-bottom: 3px;">
+                🎤 {uploader}
+            </div>
+            <div style="color: #888; font-size: 11px;">
+                ⏱️ {track['duration_str']}
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # Download button
+        if st.button(
+            "📥 **Download**", key=f"download_{key_suffix}", use_container_width=True
+        ):
+            job_id = app.download_song(track["url"])
+            st.success(f"✅ Download started! Job: {job_id}")
+            time.sleep(1)
+            st.rerun()
 
 
 def render_downloads_tab(app):
     """Render downloads status tab"""
 
-    st.markdown("### 📊 **Download Status**")
+    st.markdown("### 📊 **Download Status & History**")
 
-    if st.button("🔄 **Refresh**", type="secondary"):
+    if st.button("🔄 **Refresh Status**", type="secondary"):
         st.rerun()
 
     jobs = app.get_all_jobs()
 
     if not jobs:
-        st.info("🎵 No downloads yet. Start discovering music!")
+        st.info(
+            "🎵 No downloads yet. Go to the Discover tab to start downloading music!"
+        )
         return
 
     # Active downloads
@@ -633,14 +695,13 @@ def render_downloads_tab(app):
 
         for job in active_jobs:
             with st.container():
-                col1, col2, col3 = st.columns([3, 1, 1])
+                col1, col2, col3 = st.columns([4, 1, 1])
 
                 with col1:
                     status_emoji = "⏳" if job["status"] == "queued" else "⬇️"
-                    st.markdown(
-                        f"**{status_emoji} {job.get('artist', 'Unknown')} - Downloading...**"
-                    )
-                    st.caption(f"URL: {job['url'][:50]}...")
+                    st.markdown(f"**{status_emoji} Downloading...**")
+                    st.caption(f"URL: {job['url'][:60]}...")
+                    st.caption(f"Status: {job.get('message', 'Processing...')}")
 
                 with col2:
                     progress = job.get("progress", 0)
@@ -650,31 +711,36 @@ def render_downloads_tab(app):
                 with col3:
                     st.caption(f"Job: {job['id']}")
 
-    # Recent downloads
+    # Recent downloads (completed and failed)
     completed_jobs = [j for j in jobs.values() if j["status"] == "completed"]
     failed_jobs = [j for j in jobs.values() if j["status"] == "failed"]
 
-    if completed_jobs:
-        st.markdown("#### ✅ **Completed Downloads**")
-        for job in completed_jobs[-10:]:  # Show last 10
-            st.success(f"✅ Download completed - Job: {job['id']}")
+    col1, col2 = st.columns(2)
 
-    if failed_jobs:
-        st.markdown("#### ❌ **Failed Downloads**")
-        for job in failed_jobs[-5:]:  # Show last 5
-            st.error(f"❌ Download failed - {job.get('error', 'Unknown error')}")
+    with col1:
+        if completed_jobs:
+            st.markdown("#### ✅ **Recent Completed**")
+            for job in completed_jobs[-5:]:  # Show last 5
+                created_time = job.get("created", "")[:19].replace("T", " ")
+                st.success(f"✅ Download completed - {created_time}")
+
+    with col2:
+        if failed_jobs:
+            st.markdown("#### ❌ **Recent Failed**")
+            for job in failed_jobs[-3:]:  # Show last 3
+                st.error(f"❌ {job.get('message', 'Download failed')}")
 
 
-def render_manage_tab(app):
-    """Render management tab"""
+def render_tools_tab(app):
+    """Render library management tools"""
 
-    st.markdown("### 🔧 **Library Management**")
+    st.markdown("### 🔧 **Library Management Tools**")
 
     # Navidrome integration
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("#### 🎵 **Navidrome**")
+        st.markdown("#### 🎵 **Navidrome Integration**")
 
         if st.button("🔄 **Trigger Library Scan**", use_container_width=True):
             with st.spinner("Scanning library..."):
@@ -690,25 +756,28 @@ def render_manage_tab(app):
                             "http://localhost:4533/api/scanner/scan",
                         ],
                         timeout=30,
+                        capture_output=True,
+                        text=True,
                     )
 
                     if result.returncode == 0:
                         st.success("✅ Library scan triggered!")
                     else:
                         st.error("❌ Failed to trigger scan")
-                except:
-                    st.error("❌ Error connecting to Navidrome")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
 
-        if st.button("🧹 **Clean Database**", use_container_width=True):
-            if app.cleanup_duplicates():
-                st.success("✅ Database cleanup completed!")
-            else:
-                st.error("❌ Cleanup failed")
+        if st.button("🧹 **Clean Duplicates**", use_container_width=True):
+            with st.spinner("Cleaning duplicates..."):
+                if app.cleanup_duplicates():
+                    st.success("✅ Duplicate cleanup completed!")
+                else:
+                    st.error("❌ Cleanup failed")
 
     with col2:
-        st.markdown("#### 📊 **Quick Stats**")
+        st.markdown("#### 📊 **Storage Information**")
 
-        # Quick storage info
+        # Real-time storage info
         try:
             result = subprocess.run(
                 ["df", "-h", "/music"], capture_output=True, text=True
@@ -721,12 +790,16 @@ def render_manage_tab(app):
                         st.metric("Total Space", parts[1])
                         st.metric("Used Space", parts[2])
                         st.metric("Free Space", parts[3])
+
+                        # Usage percentage
+                        usage_pct = parts[4] if len(parts) > 4 else "Unknown"
+                        st.metric("Usage", usage_pct)
         except:
             st.info("Storage info unavailable")
 
-    # Service links
+    # Quick links
     st.markdown("---")
-    st.markdown("### 🔗 **Quick Links**")
+    st.markdown("### 🔗 **Quick Access**")
 
     link_col1, link_col2, link_col3 = st.columns(3)
 
@@ -738,6 +811,19 @@ def render_manage_tab(app):
 
     with link_col3:
         st.markdown("🎬 [**Jellyfin**](https://jellyfin.luckyverma.com)")
+
+    # Footer info
+    st.markdown("---")
+    st.markdown(
+        """
+    <div style="text-align: center; color: #666; padding: 20px;">
+        🎵 <strong>Lucky's Music Empire</strong> | Zero Subscriptions • Unlimited Downloads • Complete Ownership<br>
+        🏠 <a href="https://music.luckyverma.com" target="_blank" style="color: #1DB954;">Stream Your Music</a> | 
+        📱 Access from anywhere via HTTPS
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
