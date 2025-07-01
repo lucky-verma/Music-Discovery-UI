@@ -15,18 +15,12 @@ try:
     from services.job_service import JobManager
     from components.sidebar import render_sidebar
 
-    # Check if pages modules exist
-    pages_available = True
-    try:
-        from pages.discovery import render_discovery_page
-        from pages.import_page import render_import_page
-    except ImportError as e:
-        st.error(f"Pages import error: {e}")
-        pages_available = False
+    # Simple imports without complex error handling
+    from pages.discovery import render_discovery_page
+    from pages.import_page import render_import_page
 
 except ImportError as e:
-    st.error(f"Critical import error: {e}")
-    st.error("Please check that all module files exist and are properly configured.")
+    st.error(f"Import error: {e}")
     st.stop()
 
 # Page configuration
@@ -37,7 +31,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
+# Custom CSS (keep your existing CSS)
 st.markdown(
     """
 <style>
@@ -51,17 +45,6 @@ st.markdown(
         padding: 0.5rem 1rem;
         border-radius: 20px;
         font-weight: bold;
-    }
-    .music-card {
-        border: 1px solid #333;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        background: #1e1e1e;
-    }
-    .album-art {
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     }
     .success-box {
         background: #2d5016;
@@ -93,75 +76,56 @@ st.markdown(
 def main():
     """Main application"""
 
-    # Initialize services with error handling
-    try:
-        if "spotify_service" not in st.session_state:
-            st.session_state.spotify_service = SpotifyService()
+    # Initialize services
+    if "spotify_service" not in st.session_state:
+        st.session_state.spotify_service = SpotifyService()
 
-        if "youtube_service" not in st.session_state:
-            st.session_state.youtube_service = YouTubeService()
+    if "youtube_service" not in st.session_state:
+        st.session_state.youtube_service = YouTubeService()
 
-        if "job_manager" not in st.session_state:
-            st.session_state.job_manager = JobManager()
-    except Exception as e:
-        st.error(f"Service initialization error: {e}")
-        st.stop()
+    if "job_manager" not in st.session_state:
+        st.session_state.job_manager = JobManager()
 
     # Header
     st.title("🎵 Lucky's Music Discovery Hub")
     st.markdown("**Your Personal Music Automation Empire**")
 
     # Render sidebar
-    try:
-        render_sidebar(st.session_state.spotify_service, st.session_state.job_manager)
-    except Exception as e:
-        st.error(f"Sidebar error: {e}")
+    render_sidebar(st.session_state.spotify_service, st.session_state.job_manager)
 
-    # Main content tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        [
-            "🎵 Quick Download",
-            "📋 Playlist Manager",
-            "🔍 Discovery",
-            "📥 Import & Manage",
-            "📊 Download Status",
-        ]
-    )
+    # FIXED: Use st.columns workaround for st.tabs blank page bug
+    cols = st.columns([0.999, 0.001])
+    with cols[0]:
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(
+            [
+                "🎵 Quick Download",
+                "📋 Playlist Manager",
+                "🔍 Discovery",
+                "📥 Import & Manage",
+                "📊 Download Status",
+            ]
+        )
 
-    with tab1:
-        render_quick_download_tab()
+        with tab1:
+            render_quick_download_tab()
 
-    with tab2:
-        render_playlist_manager_tab()
+        with tab2:
+            render_playlist_manager_tab()
 
-    with tab3:
-        if pages_available:
-            try:
-                render_discovery_page(
-                    st.session_state.spotify_service,
-                    st.session_state.youtube_service,
-                    st.session_state.job_manager,
-                )
-            except Exception as e:
-                st.error(f"Discovery page error: {e}")
-                st.info("Discovery features temporarily unavailable.")
-                # Show basic fallback content
-                st.header("🔍 Music Discovery")
-                st.info("Please check the application logs for import issues.")
+        with tab3:
+            # FIXED: Call discovery page function directly
+            render_discovery_page(
+                st.session_state.spotify_service,
+                st.session_state.youtube_service,
+                st.session_state.job_manager,
+            )
 
-    with tab4:
-        if pages_available:
-            try:
-                render_import_page()
-            except Exception as e:
-                st.error(f"Import page error: {e}")
-                st.info("Import features temporarily unavailable.")
-                # Show basic fallback content
-                st.header("📥 Music Import & Management")
-                st.info("Please check the application logs for import issues.")
+        with tab4:
+            # FIXED: Call import page function directly
+            render_import_page()
 
-    with tab5:
-        render_download_status_tab()
+        with tab5:
+            render_download_status_tab()
 
     # Footer
     st.markdown("---")
@@ -177,6 +141,7 @@ def main():
     )
 
 
+# Your existing tab functions (keep these unchanged)
 def render_quick_download_tab():
     """Render quick download tab"""
     st.header("🎵 Quick Song Download")
