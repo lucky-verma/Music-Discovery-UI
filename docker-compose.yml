@@ -1,0 +1,57 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    restart: unless-stopped
+    ports:
+      - "4533:4533"
+    environment:
+      - ND_MUSICFOLDER=/music
+      - ND_SCANSCHEDULE=@every 15m
+      - ND_LOGLEVEL=info
+      - ND_SESSIONTIMEOUT=24h
+      - ND_TRANSCODINGCACHESIZE=1GB
+      - ND_ENABLEDOWNLOADS=true
+      - ND_UIWELCOMEMESSAGE="🎵 Lucky's Music Empire"
+    volumes:
+      - ./navidrome-data:/data
+      - /music:/music:ro
+    user: "0:0"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4533/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ytdl-sub:
+    image: ghcr.io/jmbannon/ytdl-sub:latest
+    container_name: ytdl-sub
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      - PUID=0
+      - PGID=0
+    volumes:
+      - ./ytdl-sub-config:/config
+      - /music:/music
+
+  music-discovery-ui:
+    build: .
+    container_name: music-discovery-ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./ytdl-sub-config:/config
+      - /music:/music
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - ytdl-sub
+      - navidrome
+    healthcheck:
+      test: ["CMD", "python", "/app/healthz.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
