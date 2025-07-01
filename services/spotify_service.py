@@ -170,8 +170,8 @@ class SpotifyService:
 
         return {"Authorization": f"Bearer {access_token}"}
 
-    def get_liked_tracks(self, limit=5000):
-        """Fetch user's liked (saved) tracks from Spotify"""
+    def get_liked_tracks(self, limit=None):
+        """Fetch user's liked (saved) tracks from Spotify - ALL tracks if no limit"""
         headers = self._get_headers()
         if not headers:
             return []
@@ -180,31 +180,22 @@ class SpotifyService:
         offset = 0
 
         try:
-            while len(tracks) < limit:
-                params = {
-                    "limit": min(50, limit - len(tracks)),
-                    "offset": offset,
-                    "market": "US",
-                }
+            while True:  # Continue until no more tracks
+                # Get 50 tracks per request (Spotify API limit)
+                params = {"limit": 50, "offset": offset, "market": "US"}
 
                 response = requests.get(
                     f"{self.base_url}/me/tracks", headers=headers, params=params
                 )
 
                 if response.status_code != 200:
-                    if response.status_code == 401:
-                        st.error("Spotify authentication expired. Please reconnect.")
-                    else:
-                        st.error(
-                            f"Failed to fetch liked tracks: {response.status_code}"
-                        )
                     break
 
                 data = response.json()
                 items = data.get("items", [])
 
                 if not items:
-                    break
+                    break  # No more tracks
 
                 for item in items:
                     track = item["track"]
@@ -224,10 +215,16 @@ class SpotifyService:
                         }
                     )
 
-                if len(items) < 50:
+                offset += 50
+
+                # If limit is specified and reached, break
+                if limit and len(tracks) >= limit:
+                    tracks = tracks[:limit]  # Trim to exact limit
                     break
 
-                offset += 50
+                # If we got fewer than 50 items, we've reached the end
+                if len(items) < 50:
+                    break
 
         except Exception as e:
             st.error(f"Error fetching liked tracks: {str(e)}")

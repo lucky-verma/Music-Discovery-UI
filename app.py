@@ -755,39 +755,38 @@ def main():
                 if st.button("📥 Sync Saved Tracks", use_container_width=True):
                     with st.spinner("Fetching your saved tracks..."):
                         try:
-                            # Get liked tracks from Spotify
-                            liked_tracks = app.spotify_service.get_liked_tracks(limit=5000)
-
+                            # First, get count of total tracks
+                            st.info("🔍 Checking total number of liked tracks...")
+                            
+                            # Get ALL tracks (no limit)
+                            liked_tracks = app.spotify_service.get_liked_tracks()
+                            
                             if liked_tracks:
-                                st.info(
-                                    f"Found **{len(liked_tracks)}** liked tracks. Queuing for download..."
-                                )
-
+                                st.success(f"🎵 Found **{len(liked_tracks)}** liked tracks!")
+                                st.info(f"📥 Queuing all {len(liked_tracks)} tracks for download...")
+                                
                                 # Queue each track for download
-                                for track in liked_tracks:
+                                for i, track in enumerate(liked_tracks):
                                     search_query = track["search_query"]
-                                    job_id = app.job_manager.add_job(
-                                        "single_song",
-                                        f"ytsearch1:{search_query}",
-                                        {
-                                            "artist": ", ".join(track["artists"]),
-                                            "album": track["album"],
-                                            "spotify_track": True,
-                                            "search_query": search_query,
-                                        },
-                                    )
-
-                                st.success(
-                                    f"✅ Queued **{len(liked_tracks)}** liked tracks for download!"
-                                )
-                                st.info(
-                                    "📊 Check the **Download Status** tab to monitor progress."
-                                )
+                                    job_id = app.job_manager.add_job("single_song", f"ytsearch1:{search_query}", {
+                                        "artist": ", ".join(track["artists"]),
+                                        "album": track["album"],
+                                        "spotify_track": True,
+                                        "search_query": search_query
+                                    })
+                                    
+                                    # Show progress every 100 tracks
+                                    if (i + 1) % 100 == 0:
+                                        st.info(f"⏳ Queued {i + 1}/{len(liked_tracks)} tracks...")
+                                
+                                st.success(f"✅ Successfully queued **{len(liked_tracks)}** liked tracks for download!")
+                                st.info("📊 Check the **Download Status** tab to monitor progress.")
                             else:
                                 st.warning("No liked tracks found in your Spotify library.")
-
+                                
                         except Exception as e:
                             st.error(f"Error fetching liked tracks: {str(e)}")
+
 
             with col2:
                 if st.button("📋 Sync Playlists", use_container_width=True):
