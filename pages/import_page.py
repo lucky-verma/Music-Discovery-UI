@@ -1491,6 +1491,3 @@ def clean_filename(name: str) -> str:
 
     return name.strip()
 
-
-if __name__ == "__main__":
-    st.write("Enhanced Import Page - Please run from main app")

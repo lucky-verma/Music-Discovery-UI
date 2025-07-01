@@ -673,7 +673,3 @@ def render_trending_section(
                             youtube_service,
                             job_manager,
                         )
-
-
-if __name__ == "__main__":
-    st.write("Enhanced Discovery Page - Please run from main app")
