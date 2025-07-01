@@ -156,6 +156,15 @@ st.markdown(
         border: 1px solid #404040;
     }
     
+    /* Spotify section styling */
+    .spotify-section {
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        color: white;
+    }
+    
     /* IMPROVED: Better text colors */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         color: #ffffff !important;
@@ -492,9 +501,44 @@ class EnhancedMusicApp:
             return False
 
 
+# IMPROVED: Instant download function with session state
+def handle_download(app, track_url, track_title, key_suffix=""):
+    """Handle download without causing app rerun"""
+    if f"downloaded_{key_suffix}" not in st.session_state:
+        st.session_state[f"downloaded_{key_suffix}"] = False
+
+    # Check if already downloaded
+    if st.session_state[f"downloaded_{key_suffix}"]:
+        return st.button(
+            "✅ Queued", key=f"dl_{key_suffix}", disabled=True, use_container_width=True
+        )
+
+    # Download button
+    if st.button("📥 Download", key=f"dl_{key_suffix}", use_container_width=True):
+        # Immediately mark as downloaded to prevent lag
+        st.session_state[f"downloaded_{key_suffix}"] = True
+
+        # Queue download in background
+        job_id = app.download_song(track_url)
+
+        # Use toast instead of st.success to avoid rerun
+        st.toast(f"🎵 Queued: {track_title[:30]}...", icon="✅")
+
+        return True
+
+    return False
+
+
 def main():
     # Initialize app
     app = EnhancedMusicApp()
+
+    # IMPROVED: Initialize session state for smooth UX
+    if "download_queue" not in st.session_state:
+        st.session_state.download_queue = set()
+
+    if "last_search" not in st.session_state:
+        st.session_state.last_search = ""
 
     # Header
     st.markdown(
@@ -510,15 +554,18 @@ def main():
     # Real Stats Dashboard
     stats = app.get_real_library_stats()
 
+    # IMPROVED: Better metrics display
+    st.markdown('<div class="metrics-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Tracks", stats["total_tracks"])
+        st.metric("Total Tracks", f"{stats['total_tracks']:,}")
     with col2:
-        st.metric("Artists", stats["artists"])
+        st.metric("Artists", f"{stats['artists']:,}")
     with col3:
-        st.metric("Albums", stats["albums"])
+        st.metric("Albums", f"{stats['albums']:,}")
     with col4:
         st.metric("Storage Used", stats["storage_used"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # Main tabs - ADDED Spotify tab
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -594,31 +641,30 @@ def main():
                             with col:
                                 # Album art
                                 if track.get("thumbnail"):
-                                    st.image(track["thumbnail"], width=150)
-                                    # Track info with better spacing
-                                    title = (
-                                        track["title"][:22] + "..."
-                                        if len(track["title"]) > 22
-                                        else track["title"]
-                                    )
-                                    uploader = (
-                                        track["uploader"][:18] + "..."
-                                        if len(track["uploader"]) > 18
-                                        else track["uploader"]
-                                    )
+                                    st.image(
+                                        track["thumbnail"], width=140
+                                    )  # Increased size
 
-                                    st.markdown(f"**{title}**")
-                                    st.caption(f"🎤 {uploader}")
-                                    st.caption(f"⏱️ {track['duration_str']}")
+                                # Track info with better spacing
+                                title = (
+                                    track["title"][:22] + "..."
+                                    if len(track["title"]) > 22
+                                    else track["title"]
+                                )
+                                uploader = (
+                                    track["uploader"][:18] + "..."
+                                    if len(track["uploader"]) > 18
+                                    else track["uploader"]
+                                )
 
-                                # Download button
-                                if st.button(
-                                    "📥 Download",
-                                    key=f"dl_{offset+i+j}",
-                                    use_container_width=True,
-                                ):
-                                    job_id = app.download_song(track["url"])
-                                    st.success(f"✅ Queued! Job: {job_id}")
+                                st.markdown(f"**{title}**")
+                                st.caption(f"🎤 {uploader}")
+                                st.caption(f"⏱️ {track['duration_str']}")
+
+                                # IMPROVED: Instant download
+                                handle_download(
+                                    app, track["url"], track["title"], f"{offset+i+j}"
+                                )
 
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -650,26 +696,34 @@ def main():
                     st.session_state.results_offset = 0
                     st.rerun()
 
-        # Quick discovery
+        # Quick discovery - YOUR CUSTOM GENRES PRESERVED
         st.header("🎭 Quick Discovery")
         genres = [
-            (" 🎥 Bollywood Hits", "latest bollywood songs"),
-            (" 🎶 Punjabi Hits", "famous punjabi songs"),
-            (" 🎤 Hindi Rap", "latest hindi rap songs"),
-            (" 💃 Hip Hop", "latest hip hop & pop songs"),
-            (" 🕺 EDM", "latest edm songs"),
-            (" 🎶 Bollywood Remix", "latest bollywood remix songs"),
-            (" 🎤 Arijit Singh", "latest arijit singh songs"),
-            (" 🎧 Bollywood 2000s", "best Bollywood 2000s songs"),
+            ("🎥 Bollywood Hits", "latest bollywood songs"),
+            ("🎶 Punjabi Hits", "famous punjabi songs"),
+            ("🎤 Hindi Rap", "latest hindi rap songs"),
+            ("💃 Hip Hop", "latest hip hop & pop songs"),
+            ("🕺 EDM", "latest edm songs"),
+            ("🎶 Bollywood Remix", "latest bollywood remix songs"),
+            ("🎤 Arijit Singh", "latest arijit singh songs"),
+            ("🎧 Bollywood 2000s", "best Bollywood 2000s songs"),
         ]
 
-        # Create genre buttons in 8 columns
+        # IMPROVED: Smoother genre buttons
         genre_cols = st.columns(8)
         for i, (genre_name, genre_query) in enumerate(genres):
             with genre_cols[i % 8]:
-                if st.button(genre_name, key=f"genre_{i}", use_container_width=True):
+                button_key = f"genre_{i}"
+                if st.button(
+                    genre_name,
+                    key=button_key,
+                    use_container_width=True,
+                    help=f"Discover {genre_name.lower()} music",
+                ):
+                    # Use session state to prevent lag
                     st.session_state.genre_query = genre_query
                     st.session_state.genre_name = genre_name
+                    st.toast(f"🎵 Loading {genre_name}...", icon="🔍")
                     st.rerun()
 
         # Display genre results if available
@@ -697,16 +751,16 @@ def main():
                                 track = results[j + k]
                                 with col:
                                     if track.get("thumbnail"):
-                                        st.image(track["thumbnail"], width=120)
+                                        st.image(track["thumbnail"], width=200)
 
                                     title = (
-                                        track["title"][:25] + "..."
-                                        if len(track["title"]) > 25
+                                        track["title"][:22] + "..."
+                                        if len(track["title"]) > 22
                                         else track["title"]
                                     )
                                     uploader = (
-                                        track["uploader"][:15] + "..."
-                                        if len(track["uploader"]) > 15
+                                        track["uploader"][:18] + "..."
+                                        if len(track["uploader"]) > 18
                                         else track["uploader"]
                                     )
 
@@ -714,13 +768,13 @@ def main():
                                     st.caption(f"🎤 {uploader}")
                                     st.caption(f"⏱️ {track['duration_str']}")
 
-                                    if st.button(
-                                        "📥 Download",
-                                        key=f"genre_dl_{j+k}",
-                                        use_container_width=True,
-                                    ):
-                                        job_id = app.download_song(track["url"])
-                                        st.success(f"✅ Queued! Job: {job_id}")
+                                    # IMPROVED: Instant download
+                                    handle_download(
+                                        app,
+                                        track["url"],
+                                        track["title"],
+                                        f"genre_dl_{j+k}",
+                                    )
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -731,7 +785,7 @@ def main():
                         st.rerun()
 
     with tab2:
-        # Spotify Sync Tab with OAuth
+        # IMPLEMENTED: Spotify Sync Tab with OAuth
         st.header("🎵 Spotify Library Sync")
 
         st.markdown('<div class="spotify-section">', unsafe_allow_html=True)
@@ -778,7 +832,7 @@ def main():
                     # Input for callback URL
                     callback_url = st.text_input(
                         "Paste the callback URL here:",
-                        placeholder="http://localhost:8501/?code=AQC...",
+                        placeholder="https://music-discovery.luckyverma.com/?code=AQC...",
                         help="After clicking the link above, copy the entire URL from your browser and paste it here",
                     )
 
@@ -846,9 +900,6 @@ def main():
                 if st.button("📥 Sync Saved Tracks", use_container_width=True):
                     with st.spinner("Fetching your saved tracks..."):
                         try:
-                            # First, get count of total tracks
-                            st.info("🔍 Checking total number of liked tracks...")
-
                             # Get ALL tracks (no limit)
                             liked_tracks = app.spotify_service.get_liked_tracks()
 
@@ -1020,7 +1071,7 @@ def main():
                                     track = spotify_results[i + j]
                                     with col:
                                         if track.get("album_art"):
-                                            st.image(track["album_art"], width=120)
+                                            st.image(track["album_art"], width=140)
 
                                         st.markdown(f"**{track['name'][:25]}**")
                                         st.caption(
@@ -1056,7 +1107,7 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
     with tab3:
-        # Playlist Manager Tab (existing code)
+        # Playlist Manager Tab
         st.header("📋 Playlist & URL Manager")
 
         st.markdown('<div class="playlist-section">', unsafe_allow_html=True)
