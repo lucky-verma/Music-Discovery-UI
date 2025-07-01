@@ -23,18 +23,6 @@ services:
       timeout: 10s
       retries: 3
 
-  ytdl-sub:
-    image: ghcr.io/jmbannon/ytdl-sub:latest
-    container_name: ytdl-sub
-    restart: unless-stopped
-    environment:
-      - TZ=America/Chicago
-      - PUID=0
-      - PGID=0
-    volumes:
-      - ./ytdl-sub-config:/config
-      - /music:/music
-
   music-discovery-ui:
     build: .
     container_name: music-discovery-ui
