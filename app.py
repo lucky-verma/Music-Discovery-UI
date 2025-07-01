@@ -68,7 +68,7 @@ st.markdown(
     }
     
     .stButton > button:hover {
-        background: linear-gradient(90deg, #1ed760, #1DB954);
+        background: linear-gradient(90deg, #14612f, #0b4a21);
         transform: translateY(-1px);
     }
     
@@ -564,18 +564,17 @@ def main():
                     st.session_state.results_offset = 0
                     st.rerun()
 
-        # Quick discovery - CHANGED to 8 columns
+        # Quick discovery
         st.header("🎭 Quick Discovery")
-
         genres = [
-            ("🇮🇳 Bollywood Hits", "bollywood songs"),
-            ("🎸 Rock Hits", "rock music"),
-            ("🎤 Pop Charts", "pop songs"),
-            ("🇰🇷 K-Pop", "kpop music"),
-            ("🎵 Electronic", "electronic music"),
-            ("🎷 Jazz", "jazz music"),
-            ("🎼 Classical", "classical music"),
-            ("🏴‍☠️ Old School", "90s music"),
+            (" 🎥 Bollywood Hits", "latest bollywood songs"),
+            (" 🎶 Punjabi Hits", "famous punjabi songs"),
+            (" 🎤 Hindi Rap", "latest hindi rap songs"),
+            (" 💃 Hip Hop", "latest hip hop & pop songs"),
+            (" 🕺 EDM", "latest edm songs"),
+            (" 🎶 Bollywood Remix", "latest bollywood remix songs"),
+            (" 🎤 Arijit Singh", "latest arijit singh songs"),
+            (" 🎧 Bollywood 2000s", "best Bollywood 2000s songs"),
         ]
 
         # Create genre buttons in 8 columns
@@ -757,14 +756,14 @@ def main():
                         try:
                             # First, get count of total tracks
                             st.info("🔍 Checking total number of liked tracks...")
-                            
+
                             # Get ALL tracks (no limit)
                             liked_tracks = app.spotify_service.get_liked_tracks()
-                            
+
                             if liked_tracks:
                                 st.success(f"🎵 Found **{len(liked_tracks)}** liked tracks!")
                                 st.info(f"📥 Queuing all {len(liked_tracks)} tracks for download...")
-                                
+
                                 # Queue each track for download
                                 for i, track in enumerate(liked_tracks):
                                     search_query = track["search_query"]
@@ -774,19 +773,18 @@ def main():
                                         "spotify_track": True,
                                         "search_query": search_query
                                     })
-                                    
+
                                     # Show progress every 100 tracks
                                     if (i + 1) % 100 == 0:
                                         st.info(f"⏳ Queued {i + 1}/{len(liked_tracks)} tracks...")
-                                
+
                                 st.success(f"✅ Successfully queued **{len(liked_tracks)}** liked tracks for download!")
                                 st.info("📊 Check the **Download Status** tab to monitor progress.")
                             else:
                                 st.warning("No liked tracks found in your Spotify library.")
-                                
+
                         except Exception as e:
                             st.error(f"Error fetching liked tracks: {str(e)}")
-
 
             with col2:
                 if st.button("📋 Sync Playlists", use_container_width=True):
