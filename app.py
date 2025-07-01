@@ -158,12 +158,9 @@ class SimpleMusicApp:
             }
 
     def search_youtube_music(self, query, max_results=12):
-        """Search YouTube Music"""
+        """Search YouTube Music using direct yt-dlp"""
         try:
             cmd = [
-                "docker",
-                "exec",
-                "ytdl-sub",
                 "yt-dlp",
                 "--flat-playlist",
                 "--dump-json",
@@ -251,9 +248,6 @@ class SimpleMusicApp:
 
             # Download using ytdl-sub
             cmd = [
-                "docker",
-                "exec",
-                "ytdl-sub",
                 "yt-dlp",
                 "--extract-audio",
                 "--audio-format",
