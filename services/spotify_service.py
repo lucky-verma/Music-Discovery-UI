@@ -170,7 +170,7 @@ class SpotifyService:
 
         return {"Authorization": f"Bearer {access_token}"}
 
-    def get_liked_tracks(self, limit=100):
+    def get_liked_tracks(self, limit=5000):
         """Fetch user's liked (saved) tracks from Spotify"""
         headers = self._get_headers()
         if not headers:
@@ -234,7 +234,7 @@ class SpotifyService:
 
         return tracks
 
-    def get_user_playlists(self, limit=20):
+    def get_user_playlists(self, limit=100):
         """Fetch user's playlists from Spotify"""
         headers = self._get_headers()
         if not headers:
@@ -354,7 +354,7 @@ class SpotifyService:
             st.error(f"Spotify search error: {str(e)}")
             return []
 
-    def get_playlist_tracks(self, playlist_id: str, limit=100):
+    def get_playlist_tracks(self, playlist_id: str, limit=5000):
         """Fetch tracks from a specific playlist"""
         headers = self._get_headers()
         if not headers:

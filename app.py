@@ -756,7 +756,7 @@ def main():
                     with st.spinner("Fetching your saved tracks..."):
                         try:
                             # Get liked tracks from Spotify
-                            liked_tracks = app.spotify_service.get_liked_tracks(limit=200)
+                            liked_tracks = app.spotify_service.get_liked_tracks(limit=5000)
 
                             if liked_tracks:
                                 st.info(
@@ -794,7 +794,7 @@ def main():
                     with st.spinner("Fetching your playlists..."):
                         try:
                             # Get user playlists from Spotify
-                            playlists = app.spotify_service.get_user_playlists(limit=50)
+                            playlists = app.spotify_service.get_user_playlists(limit=100)
 
                             if playlists:
                                 st.session_state.spotify_playlists = playlists
@@ -844,7 +844,7 @@ def main():
                                     try:
                                         # Get tracks from the playlist
                                         tracks = app.spotify_service.get_playlist_tracks(
-                                            playlist["id"], limit=500
+                                            playlist["id"], limit=5000
                                         )
 
                                         if tracks:
