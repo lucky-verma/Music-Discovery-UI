@@ -23,7 +23,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# IMPROVED: Modern Spotify-like CSS with all enhancements
 st.markdown(
     """
 <style>
@@ -200,15 +199,6 @@ st.markdown(
     /* Loading spinner custom color */
     .stSpinner > div {
         border-color: #1DB954 !important;
-    }
-    
-    /* Spotify section styling */
-    .spotify-section {
-        background: linear-gradient(135deg, #1DB954, #1ed760);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 20px 0;
-        color: white;
     }
 </style>
 """,
@@ -502,45 +492,9 @@ class EnhancedMusicApp:
             return False
 
 
-# IMPROVED: Instant download handler with session state
-def handle_download(app, track_url, track_title, key_suffix=""):
-    """Handle download without causing app rerun"""
-    if f"downloaded_{key_suffix}" not in st.session_state:
-        st.session_state[f"downloaded_{key_suffix}"] = False
-
-    # Check if already downloaded
-    if st.session_state[f"downloaded_{key_suffix}"]:
-        return st.button(
-            "✅ Queued", key=f"dl_{key_suffix}", disabled=True, use_container_width=True
-        )
-
-    # Download button
-    if st.button("📥 Download", key=f"dl_{key_suffix}", use_container_width=True):
-        # Immediately mark as downloaded to prevent lag
-        st.session_state[f"downloaded_{key_suffix}"] = True
-
-        # Queue download in background
-        job_id = app.download_song(track_url)
-
-        # Use toast instead of st.success to avoid rerun
-        st.toast(f"🎵 Queued: {track_title[:30]}...", icon="✅")
-
-        # Return True to indicate download was initiated
-        return True
-
-    return False
-
-
 def main():
     # Initialize app
     app = EnhancedMusicApp()
-
-    # IMPROVED: Initialize session state for smooth UX
-    if "download_queue" not in st.session_state:
-        st.session_state.download_queue = set()
-
-    if "last_search" not in st.session_state:
-        st.session_state.last_search = ""
 
     # Header
     st.markdown(
@@ -553,20 +507,18 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # IMPROVED: Better metrics display
+    # Real Stats Dashboard
     stats = app.get_real_library_stats()
 
-    st.markdown('<div class="metrics-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Tracks", f"{stats['total_tracks']:,}")
+        st.metric("Total Tracks", stats["total_tracks"])
     with col2:
-        st.metric("Artists", f"{stats['artists']:,}")
+        st.metric("Artists", stats["artists"])
     with col3:
-        st.metric("Albums", f"{stats['albums']:,}")
+        st.metric("Albums", stats["albums"])
     with col4:
         st.metric("Storage Used", stats["storage_used"])
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # Main tabs - ADDED Spotify tab
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -640,32 +592,33 @@ def main():
                         if i + j < len(current_page_results):
                             track = current_page_results[i + j]
                             with col:
-                                # IMPROVED: Larger album art for 8 columns
+                                # Album art
                                 if track.get("thumbnail"):
-                                    st.image(
-                                        track["thumbnail"], width=140
-                                    )  # Increased from 120 to 140
+                                    st.image(track["thumbnail"], width=150)
+                                    # Track info with better spacing
+                                    title = (
+                                        track["title"][:22] + "..."
+                                        if len(track["title"]) > 22
+                                        else track["title"]
+                                    )
+                                    uploader = (
+                                        track["uploader"][:18] + "..."
+                                        if len(track["uploader"]) > 18
+                                        else track["uploader"]
+                                    )
 
-                                # Track info with better spacing
-                                title = (
-                                    track["title"][:22] + "..."
-                                    if len(track["title"]) > 22
-                                    else track["title"]
-                                )
-                                uploader = (
-                                    track["uploader"][:18] + "..."
-                                    if len(track["uploader"]) > 18
-                                    else track["uploader"]
-                                )
+                                    st.markdown(f"**{title}**")
+                                    st.caption(f"🎤 {uploader}")
+                                    st.caption(f"⏱️ {track['duration_str']}")
 
-                                st.markdown(f"**{title}**")
-                                st.caption(f"🎤 {uploader}")
-                                st.caption(f"⏱️ {track['duration_str']}")
-
-                                # IMPROVED: Instant download
-                                handle_download(
-                                    app, track["url"], track["title"], f"{offset+i+j}"
-                                )
+                                # Download button
+                                if st.button(
+                                    "📥 Download",
+                                    key=f"dl_{offset+i+j}",
+                                    use_container_width=True,
+                                ):
+                                    job_id = app.download_song(track["url"])
+                                    st.success(f"✅ Queued! Job: {job_id}")
 
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -697,7 +650,7 @@ def main():
                     st.session_state.results_offset = 0
                     st.rerun()
 
-        # Quick discovery - KEEPING YOUR CHANGED GENRES
+        # Quick discovery
         st.header("🎭 Quick Discovery")
         genres = [
             (" 🎥 Bollywood Hits", "latest bollywood songs"),
@@ -710,20 +663,13 @@ def main():
             (" 🎧 Bollywood 2000s", "best Bollywood 2000s songs"),
         ]
 
-        # IMPROVED: Create genre buttons in 8 columns
+        # Create genre buttons in 8 columns
         genre_cols = st.columns(8)
         for i, (genre_name, genre_query) in enumerate(genres):
             with genre_cols[i % 8]:
-                if st.button(
-                    genre_name,
-                    key=f"genre_{i}",
-                    use_container_width=True,
-                    help=f"Discover {genre_name.lower()} music",
-                ):
-                    # Use session state to prevent lag
+                if st.button(genre_name, key=f"genre_{i}", use_container_width=True):
                     st.session_state.genre_query = genre_query
                     st.session_state.genre_name = genre_name
-                    st.toast(f"🎵 Loading {genre_name}...", icon="🔍")
                     st.rerun()
 
         # Display genre results if available
@@ -751,16 +697,16 @@ def main():
                                 track = results[j + k]
                                 with col:
                                     if track.get("thumbnail"):
-                                        st.image(track["thumbnail"], width=150)
+                                        st.image(track["thumbnail"], width=120)
 
                                     title = (
-                                        track["title"][:22] + "..."
-                                        if len(track["title"]) > 22
+                                        track["title"][:25] + "..."
+                                        if len(track["title"]) > 25
                                         else track["title"]
                                     )
                                     uploader = (
-                                        track["uploader"][:18] + "..."
-                                        if len(track["uploader"]) > 18
+                                        track["uploader"][:15] + "..."
+                                        if len(track["uploader"]) > 15
                                         else track["uploader"]
                                     )
 
@@ -768,13 +714,13 @@ def main():
                                     st.caption(f"🎤 {uploader}")
                                     st.caption(f"⏱️ {track['duration_str']}")
 
-                                    # IMPROVED: Instant download for genre results
-                                    handle_download(
-                                        app,
-                                        track["url"],
-                                        track["title"],
-                                        f"genre_{j+k}",
-                                    )
+                                    if st.button(
+                                        "📥 Download",
+                                        key=f"genre_dl_{j+k}",
+                                        use_container_width=True,
+                                    ):
+                                        job_id = app.download_song(track["url"])
+                                        st.success(f"✅ Queued! Job: {job_id}")
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -785,15 +731,10 @@ def main():
                         st.rerun()
 
     with tab2:
-        # IMPLEMENTED: Spotify Sync Tab (placeholder for now, can be enhanced later)
+        # Spotify Sync Tab with OAuth
         st.header("🎵 Spotify Library Sync")
 
         st.markdown('<div class="spotify-section">', unsafe_allow_html=True)
-
-        st.markdown("### 🔗 Connect Your Spotify Account")
-        st.info(
-            "💡 Connect your Spotify account to automatically download your saved tracks and playlists using yt-dlp"
-        )
 
         # Spotify credentials input
         col1, col2 = st.columns(2)
@@ -811,20 +752,91 @@ def main():
                 help="Get this from Spotify Developer Dashboard",
             )
 
-        if st.button("🔗 Connect Spotify", type="primary"):
-            if client_id and client_secret:
-                with st.spinner("Connecting to Spotify..."):
-                    if app.spotify_service.set_credentials(client_id, client_secret):
-                        st.success("✅ Successfully connected to Spotify!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to connect. Check your credentials.")
-            else:
-                st.error("Please enter both Client ID and Client Secret")
+        # Check if OAuth is completed
+        oauth_completed = app.config.get("spotify.oauth_completed", False)
 
-        # Check if Spotify is connected
-        if app.config.get("spotify.access_token"):
-            st.success("🟢 Spotify Connected!")
+        if not oauth_completed:
+            st.markdown("### 🔗 Connect Your Spotify Account")
+            st.info("💡 **Step 1**: Enter your Client ID and Secret above")
+
+            if client_id and client_secret:
+                # Save credentials
+                app.spotify_service.set_credentials(client_id, client_secret)
+
+                st.info("💡 **Step 2**: Authorize access to your Spotify account")
+
+                # Generate auth URL
+                auth_url = app.spotify_service.get_auth_url()
+                if auth_url:
+                    st.markdown(
+                        f"**Click here to authorize:** [🔗 Connect to Spotify]({auth_url})"
+                    )
+                    st.warning(
+                        "⚠️ **Important**: Copy the entire URL you're redirected to and paste it below"
+                    )
+
+                    # Input for callback URL
+                    callback_url = st.text_input(
+                        "Paste the callback URL here:",
+                        placeholder="http://localhost:8501/?code=AQC...",
+                        help="After clicking the link above, copy the entire URL from your browser and paste it here",
+                    )
+
+                    if callback_url and "code=" in callback_url:
+                        # Extract authorization code
+                        try:
+                            from urllib.parse import urlparse, parse_qs
+
+                            parsed_url = urlparse(callback_url)
+                            code = parse_qs(parsed_url.query).get("code", [None])[0]
+
+                            if code:
+                                with st.spinner("Exchanging code for token..."):
+                                    if app.spotify_service.exchange_code_for_token(
+                                        code
+                                    ):
+                                        st.success(
+                                            "✅ Successfully connected to Spotify!"
+                                        )
+                                        st.balloons()
+                                        st.rerun()
+                                    else:
+                                        st.error(
+                                            "❌ Failed to connect. Please try again."
+                                        )
+                            else:
+                                st.error(
+                                    "❌ Invalid callback URL. Please copy the entire URL."
+                                )
+                        except Exception as e:
+                            st.error(f"❌ Error processing callback URL: {str(e)}")
+            else:
+                st.warning("Please enter both Client ID and Client Secret to continue")
+
+        else:
+            # User is connected - show profile and sync options
+            user_profile = app.spotify_service.get_user_profile()
+
+            if user_profile:
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if user_profile.get("images") and user_profile["images"]:
+                        st.image(user_profile["images"][0]["url"], width=100)
+                with col2:
+                    st.success(
+                        f"🟢 Connected as **{user_profile.get('display_name', 'User')}**"
+                    )
+                    st.caption(
+                        f"Followers: {user_profile.get('followers', {}).get('total', 0)}"
+                    )
+                    st.caption(f"Country: {user_profile.get('country', 'Unknown')}")
+
+                    if st.button("🔄 Disconnect", type="secondary"):
+                        # Clear OAuth data
+                        app.config.set("spotify.oauth_completed", False)
+                        app.config.set("spotify.access_token", "")
+                        app.config.set("spotify.refresh_token", "")
+                        st.rerun()
 
             st.markdown("### 📚 Your Spotify Library")
 
@@ -833,17 +845,161 @@ def main():
             with col1:
                 if st.button("📥 Sync Saved Tracks", use_container_width=True):
                     with st.spinner("Fetching your saved tracks..."):
-                        st.info("Feature coming soon! Will sync your liked songs.")
+                        try:
+                            # First, get count of total tracks
+                            st.info("🔍 Checking total number of liked tracks...")
+
+                            # Get ALL tracks (no limit)
+                            liked_tracks = app.spotify_service.get_liked_tracks()
+
+                            if liked_tracks:
+                                st.success(
+                                    f"🎵 Found **{len(liked_tracks)}** liked tracks!"
+                                )
+                                st.info(
+                                    f"📥 Queuing all {len(liked_tracks)} tracks for download..."
+                                )
+
+                                # Queue each track for download
+                                for i, track in enumerate(liked_tracks):
+                                    search_query = track["search_query"]
+                                    job_id = app.job_manager.add_job(
+                                        "single_song",
+                                        f"ytsearch1:{search_query}",
+                                        {
+                                            "artist": ", ".join(track["artists"]),
+                                            "album": track["album"],
+                                            "spotify_track": True,
+                                            "search_query": search_query,
+                                        },
+                                    )
+
+                                    # Show progress every 100 tracks
+                                    if (i + 1) % 100 == 0:
+                                        st.info(
+                                            f"⏳ Queued {i + 1}/{len(liked_tracks)} tracks..."
+                                        )
+
+                                st.success(
+                                    f"✅ Successfully queued **{len(liked_tracks)}** liked tracks for download!"
+                                )
+                                st.info(
+                                    "📊 Check the **Download Status** tab to monitor progress."
+                                )
+                            else:
+                                st.warning(
+                                    "No liked tracks found in your Spotify library."
+                                )
+
+                        except Exception as e:
+                            st.error(f"Error fetching liked tracks: {str(e)}")
 
             with col2:
                 if st.button("📋 Sync Playlists", use_container_width=True):
                     with st.spinner("Fetching your playlists..."):
-                        st.info("Feature coming soon! Will sync your playlists.")
+                        try:
+                            # Get user playlists from Spotify
+                            playlists = app.spotify_service.get_user_playlists(
+                                limit=100
+                            )
 
-            # Search Spotify library
-            st.markdown("### 🔍 Search Your Spotify Library")
+                            if playlists:
+                                st.session_state.spotify_playlists = playlists
+                                st.success(f"Found **{len(playlists)}** playlists!")
+                                st.info("Select playlists below to sync.")
+                            else:
+                                st.warning(
+                                    "No playlists found in your Spotify account."
+                                )
+
+                        except Exception as e:
+                            st.error(f"Error fetching playlists: {str(e)}")
+
+            # IMPROVED: Playlist selection and sync
+            if (
+                hasattr(st.session_state, "spotify_playlists")
+                and st.session_state.spotify_playlists
+            ):
+                st.markdown("### 📋 Select Playlists to Sync")
+
+                for playlist in st.session_state.spotify_playlists:
+                    with st.expander(
+                        f"🎶 **{playlist['name']}** ({playlist['tracks_total']} tracks)"
+                    ):
+                        col1, col2 = st.columns([3, 1])
+
+                        with col1:
+                            st.markdown(
+                                f"**Description:** {playlist.get('description', 'No description')}"
+                            )
+                            st.markdown(f"**Owner:** {playlist['owner']}")
+                            st.markdown(f"**Tracks:** {playlist['tracks_total']}")
+                            st.markdown(
+                                f"**Public:** {'Yes' if playlist['public'] else 'No'}"
+                            )
+
+                        with col2:
+                            if playlist.get("image"):
+                                st.image(playlist["image"], width=100)
+
+                            if st.button(
+                                f"📥 Sync",
+                                key=f"sync_playlist_{playlist['id']}",
+                                use_container_width=True,
+                            ):
+                                with st.spinner(
+                                    f"Syncing playlist '{playlist['name']}'..."
+                                ):
+                                    try:
+                                        # Get tracks from the playlist
+                                        tracks = (
+                                            app.spotify_service.get_playlist_tracks(
+                                                playlist["id"], limit=5000
+                                            )
+                                        )
+
+                                        if tracks:
+                                            st.info(
+                                                f"Found **{len(tracks)}** tracks. Queuing for download..."
+                                            )
+
+                                            # Queue each track for download
+                                            for track in tracks:
+                                                search_query = track["search_query"]
+                                                job_id = app.job_manager.add_job(
+                                                    "single_song",
+                                                    f"ytsearch1:{search_query}",
+                                                    {
+                                                        "artist": ", ".join(
+                                                            track["artists"]
+                                                        ),
+                                                        "album": track["album"],
+                                                        "playlist_name": playlist[
+                                                            "name"
+                                                        ],
+                                                        "spotify_track": True,
+                                                        "search_query": search_query,
+                                                    },
+                                                )
+
+                                            st.success(
+                                                f"✅ Queued **{len(tracks)}** tracks from playlist **'{playlist['name']}'**!"
+                                            )
+                                            st.info(
+                                                "📊 Check the **Download Status** tab to monitor progress."
+                                            )
+                                        else:
+                                            st.warning(
+                                                f"No tracks found in playlist '{playlist['name']}'."
+                                            )
+
+                                    except Exception as e:
+                                        st.error(f"Error syncing playlist: {str(e)}")
+
+            # Search functionality (works with OAuth)
+            st.markdown("### 🔍 Search Spotify Catalog")
             spotify_query = st.text_input(
-                "Search your Spotify tracks:", placeholder="Search your saved music..."
+                "Search Spotify:", placeholder="Search for any music..."
             )
 
             if spotify_query:
@@ -864,18 +1020,18 @@ def main():
                                     track = spotify_results[i + j]
                                     with col:
                                         if track.get("album_art"):
-                                            st.image(track["album_art"], width=140)
+                                            st.image(track["album_art"], width=120)
 
-                                        st.markdown(f"**{track['name'][:22]}**")
+                                        st.markdown(f"**{track['name'][:25]}**")
                                         st.caption(
                                             f"🎤 {', '.join(track['artists'][:2])}"
                                         )
-                                        st.caption(f"💿 {track['album'][:18]}")
+                                        st.caption(f"💿 {track['album'][:20]}")
 
                                         # Download equivalent from YouTube
                                         if st.button(
                                             "📥 Download from YT",
-                                            key=f"spotify_dl_{i+j}",
+                                            key=f"spotify_search_dl_{i+j}",
                                             use_container_width=True,
                                         ):
                                             search_query = track["search_query"]
@@ -893,10 +1049,9 @@ def main():
                                                     "search_query": search_query,
                                                 },
                                             )
-                                            st.toast(f"✅ Queued: {track['name']}")
-
-        else:
-            st.warning("🔗 Connect your Spotify account to access sync features")
+                                            st.success(
+                                                f"✅ Queued: **{track['name']}**"
+                                            )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -932,11 +1087,11 @@ def main():
                         job_id = app.download_playlist(
                             url, playlist_name or "Downloaded Playlist"
                         )
-                        st.toast(f"📋 Playlist queued! Job: {job_id}")
+                        st.success(f"📋 Playlist queued! Job: {job_id}")
                         processed_count += 1
                     elif "youtube.com/watch" in url or "music.youtube.com" in url:
                         job_id = app.download_song(url)
-                        st.toast(f"🎵 Song queued! Job: {job_id}")
+                        st.success(f"🎵 Song queued! Job: {job_id}")
                         processed_count += 1
                     else:
                         st.warning(f"⚠️ Unsupported URL: {url[:50]}...")
