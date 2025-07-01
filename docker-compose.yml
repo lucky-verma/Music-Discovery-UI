@@ -32,10 +32,8 @@ services:
     environment:
       - TZ=America/Chicago
     volumes:
-      - ./ytdl-sub-config:/config
       - /music:/music
     depends_on:
-      - ytdl-sub
       - navidrome
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501"]
