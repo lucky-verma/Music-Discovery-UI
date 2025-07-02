@@ -1271,20 +1271,8 @@ def main():
         # Quick links
         st.markdown("---")
         st.subheader("🔗 Quick Access")
-
-        link_col1, link_col2, link_col3 = st.columns(3)
-
-        with link_col1:
-            st.markdown("🎵 [**Navidrome Player**](https://music.luckyverma.com)")
-            st.caption("Stream your music collection")
-
-        with link_col2:
-            st.markdown("⬇️ [**qBittorrent**](https://qbittorrent.luckyverma.com)")
-            st.caption("VPN-protected downloads")
-
-        with link_col3:
-            st.markdown("🎬 [**Jellyfin**](https://jellyfin.luckyverma.com)")
-            st.caption("4K media streaming")
+        st.markdown("🎵 [**Navidrome Player**](https://music.luckyverma.com)")
+        st.caption("Stream your music collection")
 
 
 if __name__ == "__main__":

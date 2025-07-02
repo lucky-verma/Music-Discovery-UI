@@ -6,13 +6,44 @@ services:
     ports:
       - "4533:4533"
     environment:
+      # Core Settings
       - ND_MUSICFOLDER=/music
-      - ND_SCANSCHEDULE=@every 15m
-      - ND_LOGLEVEL=info
-      - ND_SESSIONTIMEOUT=24h
-      - ND_TRANSCODINGCACHESIZE=1GB
-      - ND_ENABLEDOWNLOADS=true
       - ND_UIWELCOMEMESSAGE="🎵 Lucky's Music Empire"
+      - ND_LOGLEVEL=info
+      
+      # IMPROVED: Scanning & Performance
+      - ND_SCANSCHEDULE=@every 10m                    # More frequent scans for new downloads
+      - ND_SCANINTERVAL=5s                            # Faster individual file scanning
+      - ND_AUTOIMPORTPLAYLISTS=true                   # Auto-import M3U playlists
+      - ND_IGNOREDARTICLES=The,El,La,Los,Las,Le,Les   # Better sorting (ignore "The", etc.)
+      
+      # IMPROVED: Transcoding & Cache
+      - ND_TRANSCODINGCACHESIZE=2GB                   # Increased cache for better performance
+      - ND_ENABLETRANSCODINGCACHE=true                # Enable transcoding cache
+      - ND_FFMPEGPATH=/usr/bin/ffmpeg                 # Explicit FFmpeg path
+      
+      # IMPROVED: User Experience
+      - ND_SESSIONTIMEOUT=72h                         # Extended session (3 days)
+      - ND_ENABLEDOWNLOADS=true                       # Allow downloads
+      - ND_ENABLESHARING=true                         # Enable sharing features
+      - ND_ENABLESTARRATING=true                      # Enable 5-star rating system
+      - ND_ENABLEGRAVATAR=true                        # User profile pictures
+      - ND_DEFAULTTHEME=Dark                          # Dark theme by default
+      
+      # IMPROVED: Playlist & Organization
+      - ND_MAXSIDEBARPLAYLISTS=50                     # Show more playlists in sidebar
+      - ND_PLAYLISTSPATH=/music/playlists             # Dedicated playlist folder
+      - ND_COVERARTPRIORITY=embedded,cover.*,folder.*,front.*  # Album art priority
+      
+      # IMPROVED: External Services
+      - ND_ENABLEEXTERNALSERVICES=true                # Last.fm, Spotify scrobbling
+      - ND_LASTFM_ENABLED=true                        # Enable Last.fm integration
+      
+      # IMPROVED: Performance & Stability
+      - ND_ENABLEGZIP=true                            # Enable gzip compression
+      - ND_REVERSEPROXYUSERHEADER=""                  # For reverse proxy setups
+      - ND_REVERSEPROXYWHITELIST=""                   # Security for reverse proxy
+      
     volumes:
       - ./navidrome-data:/data
       - /music:/music:ro
