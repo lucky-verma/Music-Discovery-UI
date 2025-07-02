@@ -10,9 +10,13 @@ import uuid
 import re
 from urllib.parse import urlparse, parse_qs
 
+from services.enhancement_service import show_popular_features
+from services.navidrome_service import NavidromeUserManager
 from services.spotify_service import SpotifyService
 from services.youtube_service import YouTubeService
 from services.job_service import JobManager
+from services.metadata_service import MetadataService
+from services.lyrics_service import LyricsManager
 from utils.config import Config
 
 # Configure page
@@ -221,6 +225,8 @@ class EnhancedMusicApp:
         self.config = Config()
         self.spotify_service = SpotifyService()
         self.youtube_service = YouTubeService()
+        self.metadata_service = MetadataService()
+        self.lyrics_manager = LyricsManager()
         self.job_manager = JobManager()
 
         os.makedirs("/config", exist_ok=True)
@@ -500,6 +506,77 @@ class EnhancedMusicApp:
         except:
             return False
 
+    def display_enhanced_track_info(self, track, metadata=None):
+        """Display track with enhanced metadata and album art"""
+        col1, col2 = st.columns([1, 2])
+
+        with col1:
+            # Display album art
+            if metadata and metadata.get("album_art_urls"):
+                st.image(metadata["album_art_urls"][0], width=200)
+            elif track.get("thumbnail"):
+                st.image(track["thumbnail"], width=200)
+
+        with col2:
+            st.markdown(f"**🎵 {track['title']}**")
+            st.markdown(f"**🎤 Artist:** {track['uploader']}")
+            st.markdown(f"**⏱️ Duration:** {track['duration_str']}")
+
+            if metadata:
+                if metadata.get("lastfm_data", {}).get("listeners"):
+                    st.markdown(
+                        f"**👥 Listeners:** {metadata['lastfm_data']['listeners']:,}"
+                    )
+
+                if metadata.get("additional_info", {}).get("tags"):
+                    tags = ", ".join(metadata["additional_info"]["tags"])
+                    st.markdown(f"**🏷️ Tags:** {tags}")
+
+        # Enhanced download options
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button(
+                "📥 Download", key=f"dl_{track['id']}", use_container_width=True
+            ):
+                job_id = self.download_song(track["url"])
+                st.success(f"✅ Queued! Job: {job_id}")
+
+        with col2:
+            if st.button(
+                "🎨 Get Enhanced Info",
+                key=f"meta_{track['id']}",
+                use_container_width=True,
+            ):
+                with st.spinner("Fetching enhanced metadata..."):
+                    enhanced_meta = self.metadata_service.get_enhanced_metadata(
+                        track["uploader"], track["title"]
+                    )
+                    st.session_state[f"metadata_{track['id']}"] = enhanced_meta
+                    st.rerun()
+
+        with col3:
+            if st.button(
+                "📝 Get Lyrics", key=f"lyrics_{track['id']}", use_container_width=True
+            ):
+                with st.spinner("Fetching lyrics..."):
+                    lyrics = self.lyrics_manager.get_and_cache_lyrics(
+                        track["uploader"], track["title"]
+                    )
+                    if lyrics:
+                        st.session_state[f"lyrics_{track['id']}"] = lyrics
+                        st.success("Lyrics found!")
+                    else:
+                        st.warning("No lyrics found")
+                    st.rerun()
+
+        # Display lyrics if available
+        if f"lyrics_{track['id']}" in st.session_state:
+            with st.expander("📝 Lyrics"):
+                lyrics = st.session_state[f"lyrics_{track['id']}"]
+                formatted_lyrics = self.lyrics_manager.format_lyrics_for_display(lyrics)
+                st.text_area("", value=formatted_lyrics, height=300, disabled=True)
+
 
 # IMPROVED: Instant download function with session state
 def handle_download(app, track_url, track_title, key_suffix=""):
@@ -568,13 +645,14 @@ def main():
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Main tabs - ADDED Spotify tab
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "🔍 **Discover & Download**",
             "🎵 **Spotify Sync**",
             "📋 **Playlist Manager**",
             "📊 **Download Status**",
             "🔧 **Library Tools**",
+            "✨ **Enhancements**",
         ]
     )
 
@@ -1273,6 +1351,86 @@ def main():
         st.subheader("🔗 Quick Access")
         st.markdown("🎵 [**Navidrome Player**](https://music.luckyverma.com)")
         st.caption("Stream your music collection")
+
+    with tab6:
+        st.header("✨ Music Enhancement Features")
+
+        enhancement_tabs = st.tabs(
+            [
+                "🎨 Album Art & Metadata",
+                "📝 Lyrics Manager",
+                "👥 Family Accounts",
+                "🌟 Popular Features",
+            ]
+        )
+
+        with enhancement_tabs[0]:
+            st.subheader("🎨 Enhanced Album Art & Metadata")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                api_key = st.text_input(
+                    "Last.fm API Key (optional)",
+                    help="Get free API key from https://www.last.fm/api",
+                )
+                if api_key:
+                    app.config.set("lastfm.api_key", api_key)
+                    st.success("Last.fm API key saved!")
+
+            with col2:
+                if st.button("🔄 Enhance All Recent Downloads"):
+                    st.info("This will fetch enhanced metadata for recent downloads")
+
+            st.markdown(
+                """
+            **Features:**
+            - 🎨 High-resolution album artwork
+            - 📊 MusicBrainz metadata integration
+            - 🏷️ Automatic genre and mood tagging
+            - 📈 Last.fm play statistics
+            - 🎯 Similar artist suggestions
+            """
+            )
+
+        with enhancement_tabs[1]:
+            st.subheader("📝 Lyrics Management")
+
+            test_artist = st.text_input("Test Artist", value="Arijit Singh")
+            test_track = st.text_input("Test Track", value="Tum Hi Ho")
+
+            if st.button("🔍 Test Lyrics Fetch"):
+                with st.spinner("Fetching lyrics..."):
+                    lyrics = app.lyrics_manager.get_and_cache_lyrics(
+                        test_artist, test_track
+                    )
+                    if lyrics:
+                        st.success("Lyrics found!")
+                        with st.expander("📝 Lyrics Preview"):
+                            st.text_area("", value=lyrics[:500] + "...", height=200)
+                    else:
+                        st.warning("No lyrics found for this track")
+
+        with enhancement_tabs[2]:
+            navidrome_manager = NavidromeUserManager()
+            navidrome_manager.suggest_family_setup()
+
+            st.subheader("➕ Create Family Account")
+            col1, col2 = st.columns(2)
+            with col1:
+                new_username = st.text_input("Username")
+                new_name = st.text_input("Full Name")
+            with col2:
+                new_password = st.text_input("Password", type="password")
+                new_email = st.text_input("Email (optional)")
+
+            if st.button("👥 Create Account Instructions"):
+                if new_username and new_name and new_password:
+                    navidrome_manager.create_family_user(
+                        new_username, new_password, new_name, new_email
+                    )
+
+        with enhancement_tabs[3]:
+            show_popular_features()
 
 
 if __name__ == "__main__":

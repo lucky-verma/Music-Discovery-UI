@@ -5,3 +5,5 @@ PyYAML
 pillow
 mutagen
 spotipy
+musicbrainzngs
+pylast
