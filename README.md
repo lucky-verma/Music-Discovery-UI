@@ -1,52 +1,72 @@
-# 🎵 Music Discovery Hub
+# 🎵 Lucky's Music Discovery Hub
 
-A modern, Spotify-inspired web interface for YouTube Music search and download automation, integrated with your homelab media server.
+A modern, Spotify-inspired web interface for YouTube Music search, download automation, and Spotify library sync - integrated with your homelab media server.
 
 ## **🎯 What It Does**
 
-**Search** → **Download** → **Auto-Organize** → **Stream via Navidrome**
+**Search** → **Download** → **Auto-Organize** → **Stream via Navidrome**  
+**Spotify Sync** → **Bulk Download** → **AI Organization** → **Zero Subscriptions**
 
-- **YouTube Music search** with album art and metadata
-- **One-click downloads** with background processing  
-- **Auto-organization** by artist/album structure
-- **Real-time library statistics** from your music collection
+- **YouTube Music search** with intelligent content filtering
+- **Spotify integration** for syncing your entire music library
+- **One-click downloads** with instant feedback and background processing
+- **Smart auto-organization** by artist/album structure with metadata
+- **Real-time library statistics** from your actual music collection
 - **Navidrome integration** for immediate streaming access
 
 ## **✨ Current Features**
 
 ### **🔍 Discovery & Search**
 
-- YouTube Music search with music content filtering
-- Quick genre discovery (Bollywood, K-Pop, Rock, etc.)
-- Album artwork and track metadata display
-- Background download queue with progress tracking
+- YouTube Music search with advanced music content filtering
+- 8-column grid layout for optimal browsing experience
+- Quick genre discovery (Bollywood, Punjabi, Hip Hop, EDM, etc.)
+- Album artwork and comprehensive track metadata display
+- Instant download feedback with progress tracking
+
+### **🎵 Spotify Integration**
+
+- **OAuth authentication** for secure Spotify account access
+- **Sync your liked tracks** - automatically download all saved songs
+- **Sync playlists** - bulk download entire playlists with one click
+- **Search Spotify catalog** and download via YouTube
+- **Complete library sync** - import your entire Spotify collection
 
 ### **📥 Download Management**
 
 - Single song and playlist URL processing
 - 320kbps MP3 with embedded thumbnails and metadata
-- Real-time download status and history
-- Automatic Navidrome library scanning
+- Instant download queue with real-time progress tracking
+- Background job management with retry capabilities
+- Automatic Navidrome library scanning after downloads
 
 ### **📊 Library Management**
 
 - Live statistics from your actual music collection
-- Storage usage monitoring
-- Navidrome database cleanup tools
-- Duplicate track management (automatic)
+- Storage usage monitoring with ZFS integration
+- Navidrome database cleanup and optimization tools
+- Intelligent duplicate track management
+- Library import tools for existing collections
 
 ## **🗂️ Folder Structure**
 
-``` bash
+```
+
 /music/
-├── library/              # Your existing 20k tracks (to be organized)
+├── library/              # Your existing music collection (imported)
 ├── youtube-music/        # New downloads (auto-organized)
 │   ├── Artist Name/
 │   │   └── Album Name/
 │   │       ├── 01 - Song.mp3
 │   │       ├── 02 - Song.mp3
 │   │       └── cover.jpg
-└── playlists/           # M3U playlists (future use)
+├── spotify-sync/         # Spotify synchronized tracks
+│   ├── Liked Songs/
+│   └── Playlists/
+│       ├── Playlist Name/
+│       └── Another Playlist/
+└── playlists/           # M3U playlists and collections
+
 ```
 
 ## **🚀 Quick Deploy**
@@ -54,93 +74,217 @@ A modern, Spotify-inspired web interface for YouTube Music search and download a
 ### **Prerequisites**
 
 - Container 104 with Docker running
-- Navidrome configured and accessible
+- Navidrome configured and accessible at `192.168.1.39:4533`
 - ZFS music storage mounted at `/music`
+- Spotify Developer App (for Spotify sync features)
 
 ### **Installation**
 
-```bash
+``` bash
 # Navigate to your Docker data directory
 pct enter 104
-cd /mnt/docker-data/navidrome-music-system
-mkdir -p music-discovery-ui && cd music-discovery-ui
+cd /mnt/docker-data
+git clone  music-discovery-hub
+cd music-discovery-hub
 
-# Create the app files (copy from your working version)
-# app.py, requirements.txt, Dockerfile, docker-compose.yml
-
-# Deploy the stack
+# Build and deploy the stack
 docker compose up --build -d
+
+# Verify deployment
+docker ps | grep music-discovery
 ```
 
-### **Access**
+### **External Access**
 
-- **External**: `https://music-download.luckyverma.com`
+- **Music Discovery UI**: `https://music-discovery.luckyverma.com`
+- **Navidrome Player**: `https://music.luckyverma.com`
+
+### **Spotify Setup**
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create new app with redirect URI: `https://music-discovery.luckyverma.com`
+3. Copy Client ID and Client Secret
+4. Enter credentials in the Spotify Sync tab
+5. Complete OAuth flow to access your library
 
 ## **📱 How to Use**
 
-### **Search & Download**
+### **🔍 Search & Download**
 
-1. **Search** for artists, songs, or albums
-2. **Browse genres** with quick discovery buttons
-3. **Click download** - files process in background
-4. **Stream immediately** via Navidrome once complete
+1. **Search** for artists, songs, or albums using the enhanced search
+2. **Browse genres** with curated quick discovery buttons
+3. **Click download** - get instant feedback with background processing
+4. **Monitor progress** in the Download Status tab
+5. **Stream immediately** via Navidrome once complete
 
-### **Playlist Management**
+### **🎵 Spotify Library Sync**
+
+1. **Connect Spotify** using OAuth in the Spotify Sync tab
+2. **Sync Liked Songs** - download all your saved tracks automatically
+3. **Sync Playlists** - select and download entire playlists
+4. **Monitor progress** - watch as your entire library downloads
+5. **Access instantly** - stream via Navidrome as downloads complete
+
+### **📋 Playlist Management**
 
 1. **Paste URLs** (YouTube/YouTube Music playlists)
-2. **Preview content** before downloading
-3. **Bulk download** entire playlists with one click
+2. **Preview content** before downloading with metadata
+3. **Bulk download** entire playlists with progress tracking
+4. **Custom organization** with playlist naming options
 
-### **Library Monitoring**
+### **📊 Library Monitoring**
 
-- **Real stats** show actual track/artist/album counts
-- **Storage monitoring** displays usage from ZFS
-- **Download history** tracks all completed jobs
+- **Real-time stats** show actual track/artist/album counts
+- **Storage monitoring** displays ZFS usage and performance
+- **Download history** tracks all completed jobs with details
+- **Health monitoring** for Navidrome integration
 
 ## **🎵 Current Status**
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Search** | ✅ Working | YouTube Music integration |
-| **Downloads** | ✅ Working | yt-dlp with 320kbps MP3 |
-| **Organization** | ✅ Working | Auto artist/album folders |
-| **Library Stats** | ✅ Working | Real-time from `/music` |
-| **Background Jobs** | ✅ Working | Queue with progress tracking |
-| **Navidrome Sync** | ✅ Working | Auto-scan after downloads |
+| **YouTube Search** | ✅ Complete | Advanced filtering, 8-column layout |
+| **Spotify OAuth** | ✅ Complete | Full library access and sync |
+| **Downloads** | ✅ Complete | Direct yt-dlp with instant feedback |
+| **Organization** | ✅ Complete | Smart artist/album/track structure |
+| **Library Stats** | ✅ Complete | Real-time from `/music` with ZFS |
+| **Background Jobs** | ✅ Complete | Advanced queue with retry logic |
+| **Navidrome Sync** | ✅ Complete | Auto-scan with duplicate handling |
+| **UI/UX** | ✅ Complete | Spotify-inspired dark theme, 8-column grid |
 
-## **🔧 Technical Details**
+## **🔧 Technical Stack**
 
-### **Stack**
+### **Frontend**
 
-- **Frontend**: Streamlit with Spotify-like dark theme
-- **Download Engine**: yt-dlp (direct integration)
-- **Audio Quality**: 320kbps MP3 + embedded artwork
-- **Organization**: Automatic artist/album/track structure
-- **Integration**: Navidrome API for library scanning
+- **Streamlit** with custom Spotify-inspired dark theme
+- **8-column responsive grid** for optimal track browsing
+- **Instant feedback** with session state management
+- **Progressive enhancement** with smooth animations
+
+### **Backend Services**
+
+- **yt-dlp** direct integration for YouTube downloads
+- **Spotify Web API** with OAuth 2.0 authentication
+- **Background job manager** with retry and progress tracking
+- **Navidrome API** integration for library management
+
+### **Audio Quality & Metadata**
+
+- **320kbps MP3** with embedded artwork and metadata
+- **Automatic tagging** with artist, album, and track information
+- **Thumbnail embedding** for visual library browsing
+- **Smart filename sanitization** for cross-platform compatibility
 
 ### **Storage Integration**
 
-```bash
-# Current ZFS allocation
+``` bash
+# ZFS Pool Allocation
 data/media/music              2.57G  # Base music storage
-data/media/music/library      96K    # Your 20k tracks (to migrate)
-data/media/music/youtube-music 96K   # New downloads
-data/media/music/playlists    96K    # Future playlist storage
+data/media/music/library      96K    # Imported existing collection
+data/media/music/youtube-music 96K   # YouTube downloads
+data/media/music/spotify-sync 96K    # Spotify synchronized content
+data/media/music/playlists    96K    # Playlists and collections
 ```
 
-## **🎧 Next Steps**
+## **📂 Library Import**
 
-1. **Deploy the app** using the instructions above
-2. **Test downloads** with a few songs
-3. **Import your 20k tracks** to `/music/library/`
-4. **Access via Navidrome** at `https://music.luckyverma.com`
+For importing your existing unorganized music collection, use the included import script:
+
+``` bash
+# Run the music import script
+python3 music_import_tool.py --source /path/to/hdd --target /music/library --organize
+```
+
+See `music_import_tool.py` for detailed import options and network setup.
 
 ## **🔗 Ecosystem Integration**
 
 - **Navidrome**: `https://music.luckyverma.com` (streaming)
-- **qBittorrent**: `https://qbittorrent.luckyverma.com` (torrents)  
-- **Jellyfin**: `https://jellyfin.luckyverma.com` (media server)
+- **qBittorrent**: `https://qbittorrent.luckyverma.com` (VPN-protected torrents)
+- **Jellyfin**: `https://jellyfin.luckyverma.com` (4K media streaming)
+- **Immich**: `https://immich.luckyverma.com` (AI photo management)
 
-**🎯 Goal**: Zero music subscriptions, unlimited downloads, complete ownership, seamless streaming from anywhere.
+## **🎯 Features Roadmap**
+
+### **Phase 1: Core Functionality** ✅ **COMPLETE**
+
+- YouTube Music search and download
+- Spotify OAuth and library sync
+- Background job management
+- Navidrome integration
+
+### **Phase 2: Enhanced Organization** 🔄 **IN PROGRESS**
+
+- Advanced metadata extraction and cleanup
+- Duplicate detection and removal
+- Album art enhancement and standardization
+- Automatic playlist generation
+
+### **Phase 3: AI & Automation** 📋 **PLANNED**
+
+- AI-powered music recommendation
+- Automatic genre classification
+- Smart playlist creation based on listening habits
+- Integration with Last.fm for scrobbling
+
+### **Phase 4: Advanced Features** 📋 **PLANNED**
+
+- Multi-user support with separate libraries
+- Advanced search with natural language queries
+- Integration with other streaming services
+- Mobile app companion
+
+## **🛠️ Development**
+
+### **Contributing**
+
+- Fork the repository
+- Create feature branch
+- Submit pull request with detailed description
+
+### **Local Development**
+
+``` bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run development server
+streamlit run app.py --server.port 8501
+```
+
+### **Container Development**
+
+``` bash
+# Build and test locally
+docker build -t music-discovery-hub .
+docker run -p 8501:8501 -v /music:/music music-discovery-hub
+```
+
+## **📝 Configuration**
+
+### **Environment Variables**
+
+- `TZ`: Timezone (default: America/Chicago)
+- `SPOTIFY_CLIENT_ID`: Spotify application client ID
+- `SPOTIFY_CLIENT_SECRET`: Spotify application client secret
+
+### **Volume Mounts**
+
+- `/music`: Music library storage (ZFS recommended)
+- `/config`: Application configuration and job data
+- `/var/run/docker.sock`: Docker socket for container management
+
+## **🎵 Goals Achieved**
+
+✅ **Zero music subscriptions** - Download unlimited music for free  
+✅ **Complete ownership** - All music stored locally with metadata  
+✅ **Global streaming** - Access your library from anywhere via HTTPS  
+✅ **Spotify integration** - Sync your entire Spotify library automatically  
+✅ **Enterprise quality** - GPU-accelerated transcoding, VPN protection  
+✅ **Seamless experience** - Search, download, stream in one interface  
+
+**🏆 Result**: The ultimate personal music empire with complete privacy, unlimited content, and professional-grade streaming capabilities.
+
+---
 
 *Part of Lucky's Homelab - Container 104*
