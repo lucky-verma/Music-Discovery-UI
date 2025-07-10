@@ -1,35 +1,55 @@
-# Enhanced non-interactive Beets configuration
+# Optimized non-interactive Beets configuration with metadata enrichment
 directory: /music/organized
 library: /config/musiclibrary.db
 
-# Non-interactive import with safe autotagging
+# Import settings (enhanced for automation and metadata)
 import:
-  move: no                    # Copy files, preserve originals
+  move: no                    # Copy files (keep originals safe)
   write: yes                  # Write metadata to files
   incremental: yes            # Only process new files
   quiet_fallback: skip       # Skip unidentifiable tracks
   timid: no                   # No confirmation prompts
-  autotag: yes                # Enable MusicBrainz matching (non-interactive with thresholds)
-  quiet: yes                  # Suppress output
-  default_action: apply       # Auto-apply good matches
+  autotag: yes                # Enable MusicBrainz matching for metadata
+  quiet: yes                  # Suppress unnecessary output
+  default_action: apply       # Auto-apply best matches
   none_rec_action: skip       # Skip no-match items
-  detail: no                  # No detailed output
-  group_albums: yes           # Group into albums (fixes Albums: 0)
-  strong_rec_thresh: 0.1      # Accept high-confidence matches automatically
-  medium_rec_thresh: 0.3      # Accept medium matches
-  low_rec_thresh: 0.5         # Skip low-confidence
-
-# Plugins for enrichment (including lyrics)
+  detail: no                  # No detailed prompts
+  group_albums: yes           # Group tracks into albums
+  
+# Enable plugins for rich metadata
 plugins: [
-  fetchart,                   # Album art
-  embedart,                   # Embed art
-  lastgenre,                  # Genres
-  duplicates,                 # Deduplication
-  info,                       # Extra info
-  web,                        # Web UI
-  scrub,                      # Clean tags
-  lyrics                      # Lyrics fetching
+  fetchart,                   # Fetch album artwork
+  embedart,                   # Embed artwork in files
+  lastgenre,                  # Add genre tags via Last.fm
+  duplicates,                 # Detect and handle duplicates
+  info,                       # Extended track info
+  web,                        # Web interface
+  scrub,                      # Clean metadata
+  lyrics                      # Fetch lyrics
 ]
+
+# MusicBrainz settings (for better matching)
+musicbrainz:
+  searchlimit: 10             # More search results for accuracy
+
+# Album art settings (auto-enabled)
+fetchart:
+  auto: yes                   # Auto-fetch artwork
+  sources: coverart musicbrainz amazon google  # Multiple sources for best results
+  
+embedart:
+  auto: yes                   # Auto-embed artwork
+  maxwidth: 1000              # High-res images
+
+# Genre classification
+lastgenre:
+  auto: yes                   # Auto-add genres
+  source: album               # Use album-level genres
+
+# Lyrics settings
+lyrics:
+  auto: yes                   # Auto-fetch lyrics
+  fallback: ''                # No fallback if not found
 
 # Web interface
 web:
@@ -40,27 +60,4 @@ web:
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
   singleton: Singles/$artist - $title
-
-# Album art (auto-enabled)
-fetchart:
-  auto: yes                   # Auto-fetch art
-  sources: coverart musicbrainz amazon google
-  
-embedart:
-  auto: yes                   # Auto-embed art
-  maxwidth: 1000
-
-# Lyrics (auto-fetch during import)
-lyrics:
-  auto: yes                   # Enable auto-fetch
-  fallback: ''                # No fallback text
-  force: no                   # Don't overwrite existing
-
-# Deduplication (stricter)
-duplicates:
-  album: yes                  # Check by album
-  checksum: yes               # Use audio checksums
-  copy: /music/duplicates     # Move duplicates here
-  strict: yes                 # Strict matching
-  tiebreak:
-    items: [bitrate, length]  # Prefer higher quality
+  comp: Compilations/$album%aunique{}/$track - $title
