@@ -72,7 +72,7 @@ duplicates:
 
 # Clean up patterns
 rewrite:
-  '^\.': _           # Replace leading dots
-  '[\\/]': _         # Replace slashes
-  '^-': _            # Replace leading dashes
+  '^\.': '_'         # Replace leading dots
+  '[/\\]': '_'       # Replace slashes (corrected escaping)
+  '^-': '_'          # Replace leading dashes  
   '\s+$': ''         # Remove trailing whitespace
