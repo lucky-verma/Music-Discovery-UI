@@ -1,34 +1,29 @@
-# --- Fully Automated Beets Configuration for Unattended Enrichment ---
-
+# Optimized non-interactive Beets configuration with metadata enrichment
 directory: /music/organized
 library: /config/musiclibrary.db
-log: /config/beetslog.txt # Central log file for all operations
+log: /config/beets.log     # Added for debugging
 
-# Performance settings
-threaded: yes
-original_date: yes
-
-# --- Import Settings: Designed for Full Automation ---
+# Import settings (enhanced for non-interactive automation)
 import:
   move: no                  # Copy files (keep originals safe)
   copy: yes                 # Explicitly copy
   write: yes                # Write metadata to files
-  incremental: no             # Process all files on the first run. Set to 'yes' for later.
-  timid: no                   # No confirmation prompts for strong matches
-  autotag: yes                # Enable MusicBrainz matching
-  group_albums: yes           # Keep this enabled, but we'll control its behavior with command flags.
+  incremental: yes          # Only process new files
+  quiet_fallback: asis      # Import as-is if no match (reduces skipping)
+  timid: no                 # No confirmation prompts
+  autotag: yes              # Enable MusicBrainz matching
+  quiet: yes                # Suppress unnecessary output
+  default_action: apply     # Auto-apply best matches without prompting
+  none_rec_action: asis     # Import as-is for no-matches (key to reduce skipping)
+  detail: no                # No detailed prompts
+  group_albums: yes         # Group tracks into albums
+  strong_rec_thresh: 0.02   # Lower threshold for accepting matches (more aggressive)
+  medium_rec_thresh: 0.20   # Adjusted for better matching
 
-  # --- CRITICAL: Automatic Actions for All Match Levels ---
-  # This section ensures the import never stops to ask for input.
-  strong_rec_action: apply    # Automatically apply strong matches
-  medium_rec_action: apply    # Automatically apply medium matches
-  weak_rec_action: asis       # **THE FIX**: For weak matches (like your 15% example), import the track as-is instead of asking.
-  none_rec_action: asis       # If no match is found, import as-is. This prevents skipping.
-
-# --- Plugins: Corrected and Optimized ---
+# Plugins for rich metadata
 plugins:
-  - chroma                    # Audio fingerprinting
-  - from_filename             # **CORRECTED NAME**: Guesses tags from filenames. (was 'fromfilename')
+  - chroma                  # Audio fingerprinting (helps with unmatched tracks)
+  - fromfilename            # Guess tags from filenames
   - fetchart
   - embedart
   - lastgenre
@@ -38,22 +33,14 @@ plugins:
   - web
   - info
 
-# --- Matching Engine: Fine-tuned for Automation ---
+# Matching: Prioritize fingerprinting
 match:
-  strong_rec_thresh: 0.04
-  medium_rec_thresh: 0.25
-  # Give more weight to audio fingerprints for higher accuracy on files with bad text metadata
+  strong_rec_thresh: 0.02   # More lenient for auto-apply
+  medium_rec_thresh: 0.20
   distance_weights:
-    chroma: 10.0
+    chroma: 10.0            # High weight on fingerprints
 
-# --- Plugin Settings for Automation ---
-
-chroma:
-  auto: yes                   # Automatically fingerprint every track
-
-scrub:
-  auto: yes                   # Automatically clean unwanted tags
-
+# Album art settings
 fetchart:
   auto: yes
   sources: [coverart, musicbrainz, amazon, google, fanarttv, albumart]
@@ -62,20 +49,23 @@ embedart:
   auto: yes
   maxwidth: 1200
 
+# Genre settings
 lastgenre:
   auto: yes
   source: album
-  
+
+# Lyrics settings
 lyrics:
   auto: yes
   fallback: ''
 
+# Web interface
 web:
   host: 0.0.0.0
   port: 8337
 
-# --- File Organization Paths ---
+# Path formatting
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
-  singleton: Singles/$artist/$artist - $title
+  singleton: Singles/$artist - $title
   comp: Compilations/$album%aunique{}/$track - $title
