@@ -1,31 +1,34 @@
-# Non-interactive Beets configuration
+# Enhanced non-interactive Beets configuration
 directory: /music/organized
 library: /config/musiclibrary.db
 
-# FIXED: Fully non-interactive import settings
+# Non-interactive import with safe autotagging
 import:
-  move: no                    # Copy files, don't move them
+  move: no                    # Copy files, preserve originals
   write: yes                  # Write metadata to files
   incremental: yes            # Only process new files
   quiet_fallback: skip       # Skip unidentifiable tracks
-  timid: no                   # Don't ask for confirmation
-  autotag: no                 # Disable MusicBrainz matching entirely
-  quiet: yes                  # Suppress prompts
-  default_action: skip        # Default action for ambiguous matches
-  none_rec_action: skip       # Skip items with no recommendations
-  detail: no                  # Don't show detailed info
-  group_albums: no            # Don't try to group into albums
-  
-# Enable minimal plugins only
+  timid: no                   # No confirmation prompts
+  autotag: yes                # Enable MusicBrainz matching (non-interactive with thresholds)
+  quiet: yes                  # Suppress output
+  default_action: apply       # Auto-apply good matches
+  none_rec_action: skip       # Skip no-match items
+  detail: no                  # No detailed output
+  group_albums: yes           # Group into albums (fixes Albums: 0)
+  strong_rec_thresh: 0.1      # Accept high-confidence matches automatically
+  medium_rec_thresh: 0.3      # Accept medium matches
+  low_rec_thresh: 0.5         # Skip low-confidence
+
+# Plugins for enrichment (including lyrics)
 plugins: [
-  fetchart,
-  embedart,
-  lastgenre,
-  duplicates,
-  info,
-  web,
-  scrub,
-  lyrics
+  fetchart,                   # Album art
+  embedart,                   # Embed art
+  lastgenre,                  # Genres
+  duplicates,                 # Deduplication
+  info,                       # Extra info
+  web,                        # Web UI
+  scrub,                      # Clean tags
+  lyrics                      # Lyrics fetching
 ]
 
 # Web interface
@@ -33,14 +36,31 @@ web:
   host: 0.0.0.0
   port: 8337
 
-# Simple path formatting
+# Path formatting
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
   singleton: Singles/$artist - $title
-  
-# Album art settings (minimal)
+
+# Album art (auto-enabled)
 fetchart:
-  auto: no                    # Don't auto-fetch (avoid delays)
+  auto: yes                   # Auto-fetch art
+  sources: coverart musicbrainz amazon google
   
 embedart:
-  auto: no                    # Don't auto-embed (avoid delays)
+  auto: yes                   # Auto-embed art
+  maxwidth: 1000
+
+# Lyrics (auto-fetch during import)
+lyrics:
+  auto: yes                   # Enable auto-fetch
+  fallback: ''                # No fallback text
+  force: no                   # Don't overwrite existing
+
+# Deduplication (stricter)
+duplicates:
+  album: yes                  # Check by album
+  checksum: yes               # Use audio checksums
+  copy: /music/duplicates     # Move duplicates here
+  strict: yes                 # Strict matching
+  tiebreak:
+    items: [bitrate, length]  # Prefer higher quality
