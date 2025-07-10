@@ -89,7 +89,7 @@ st.markdown(
         box-shadow: 0 6px 25px rgba(29, 185, 84, 0.3);
     }
     
-    /* IMPROVED: Subtle download button styling */
+    /* Subtle download button styling */
     .stButton > button {
         background: linear-gradient(135deg, #333333, #404040);
         color: #ffffff;
@@ -115,7 +115,7 @@ st.markdown(
         box-shadow: 0 2px 6px rgba(29, 185, 84, 0.2);
     }
     
-    /* IMPROVED: Music card styling with better spacing */
+    /* Music card styling with better spacing */
     .music-card {
         background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
         border-radius: 12px;
@@ -134,7 +134,7 @@ st.markdown(
         box-shadow: 0 8px 25px rgba(29, 185, 84, 0.2);
     }
     
-    /* IMPROVED: Results container with better spacing */
+    /* Results container with better spacing */
     .results-container {
         width: 100%;
         margin: 20px 0;
@@ -169,7 +169,7 @@ st.markdown(
         color: white;
     }
     
-    /* IMPROVED: Better text colors */
+    /* Better text colors */
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         color: #ffffff !important;
     }
@@ -578,7 +578,7 @@ class EnhancedMusicApp:
                 st.text_area("", value=formatted_lyrics, height=300, disabled=True)
 
 
-# IMPROVED: Instant download function with session state
+# Instant download function with session state
 def handle_download(app, track_url, track_title, key_suffix=""):
     """Handle download without causing app rerun"""
     if f"downloaded_{key_suffix}" not in st.session_state:
@@ -606,11 +606,43 @@ def handle_download(app, track_url, track_title, key_suffix=""):
     return False
 
 
+def debug_stuck_jobs():
+    """Debug function to check stuck jobs"""
+    app = EnhancedMusicApp()
+
+    # Get all jobs
+    jobs = app.job_manager.get_all_jobs()
+
+    st.header("🐛 Debug Stuck Jobs")
+
+    for job_id, job in jobs.items():
+        if job["status"] in ["queued", "running"]:
+            st.subheader(f"Job {job_id}")
+
+            # Show job details
+            st.json(job)
+
+            # Show debug info
+            debug_info = app.job_manager.debug_job(job_id)
+            st.json(debug_info)
+
+            # Manual controls
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button(f"Cancel {job_id}"):
+                    app.job_manager.cancel_job(job_id)
+                    st.success("Job cancelled")
+            with col2:
+                if st.button(f"Retry {job_id}"):
+                    app.job_manager.retry_job(job_id)
+                    st.success("Job retried")
+
+
 def main():
     # Initialize app
     app = EnhancedMusicApp()
 
-    # IMPROVED: Initialize session state for smooth UX
+    # Initialize session state for smooth UX
     if "download_queue" not in st.session_state:
         st.session_state.download_queue = set()
 
@@ -631,7 +663,7 @@ def main():
     # Real Stats Dashboard
     stats = app.get_real_library_stats()
 
-    # IMPROVED: Better metrics display
+    # Better metrics display
     st.markdown('<div class="metrics-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -739,7 +771,7 @@ def main():
                                 st.caption(f"🎤 {uploader}")
                                 st.caption(f"⏱️ {track['duration_str']}")
 
-                                # IMPROVED: Instant download
+                                # Instant download
                                 handle_download(
                                     app, track["url"], track["title"], f"{offset+i+j}"
                                 )
@@ -787,7 +819,7 @@ def main():
             ("🎧 Bollywood 2000s", "best Bollywood 2000s songs"),
         ]
 
-        # IMPROVED: Smoother genre buttons
+        # Smoother genre buttons
         genre_cols = st.columns(8)
         for i, (genre_name, genre_query) in enumerate(genres):
             with genre_cols[i % 8]:
@@ -846,7 +878,7 @@ def main():
                                     st.caption(f"🎤 {uploader}")
                                     st.caption(f"⏱️ {track['duration_str']}")
 
-                                    # IMPROVED: Instant download
+                                    # Instant download
                                     handle_download(
                                         app,
                                         track["url"],
@@ -1044,7 +1076,7 @@ def main():
                         except Exception as e:
                             st.error(f"Error fetching playlists: {str(e)}")
 
-            # IMPROVED: Playlist selection and sync
+            # Playlist selection and sync
             if (
                 hasattr(st.session_state, "spotify_playlists")
                 and st.session_state.spotify_playlists
