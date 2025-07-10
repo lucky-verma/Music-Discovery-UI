@@ -1,63 +1,89 @@
-# Optimized non-interactive Beets configuration with metadata enrichment
+# --- Revised Beets Configuration for Automated Deep Enrichment ---
+
 directory: /music/organized
 library: /config/musiclibrary.db
+log: /config/beetslog.txt    # Log all activity for easier debugging
 
-# Import settings (enhanced for automation and metadata)
+# Enable multithreading for faster processing
+threaded: yes
+original_date: yes
+
+# --- Import Settings: More Robust and Less Strict ---
 import:
-  move: no                    # Copy files (keep originals safe)
-  write: yes                  # Write metadata to files
-  incremental: yes            # Only process new files
-  quiet_fallback: skip       # Skip unidentifiable tracks
-  timid: no                   # No confirmation prompts
-  autotag: yes                # Enable MusicBrainz matching for metadata
-  quiet: yes                  # Suppress unnecessary output
-  default_action: apply       # Auto-apply best matches
-  none_rec_action: skip       # Skip no-match items
-  detail: no                  # No detailed prompts
-  group_albums: yes           # Group tracks into albums
+  move: no
+  copy: yes                   # Explicitly copy files, keeping originals safe
+  write: yes
+  incremental: no             # IMPORTANT: Set to 'no' for the first big import, then 'yes' for later runs
+  timid: no                   # Fully non-interactive, no prompts
+  autotag: yes
+  quiet: no                   # Disable quiet mode to see progress and errors on the first run
+  group_albums: yes
   
-# Enable plugins for rich metadata
-plugins: [
-  fetchart,                   # Fetch album artwork
-  embedart,                   # Embed artwork in files
-  lastgenre,                  # Add genre tags via Last.fm
-  duplicates,                 # Detect and handle duplicates
-  info,                       # Extended track info
-  web,                        # Web interface
-  scrub,                      # Clean metadata
-  lyrics                      # Fetch lyrics
-]
+  # More forgiving actions for different match qualities
+  default_action: apply       # Apply the best match found
+  strong_rec_action: apply    # Automatically apply any strong matches
+  medium_rec_action: apply    # Automatically apply medium-confidence matches
+  none_rec_action: asis       # CRITICAL: If no match is found, import the file as-is instead of skipping
 
-# MusicBrainz settings (for better matching)
-musicbrainz:
-  searchlimit: 10             # More search results for accuracy
+# --- Plugins: Added Fingerprinting and Filename Parsing ---
+plugins:
+  - chroma                    # For audio fingerprinting (most powerful feature for messy files)
+  - fromfilename              # Helps guess tags from filenames
+  - fetchart
+  - embedart
+  - lastgenre
+  - duplicates
+  - scrub
+  - lyrics
+  - web
+  - info
 
-# Album art settings (auto-enabled)
+# --- Matching: Use Fingerprinting and Tweak Thresholds ---
+match:
+  strong_rec_thresh: 0.04     # Default is 0.04, you can lower to be more aggressive, e.g., 0.02
+  medium_rec_thresh: 0.25     # Default is 0.25, increase to be more selective on medium matches
+  # Give more weight to fingerprints to improve accuracy
+  distance_weights:
+    chroma: 10.0
+
+# --- Plugin Settings for Full Automation ---
+
+# AcoustID/Chroma for audio fingerprinting
+# Note: The docker container might need pyacoustid installed.
+chroma:
+  auto: yes                   # Automatically fingerprint every track
+
+# Scrub away unwanted tags after processing
+scrub:
+  auto: yes
+
+# Album art settings
 fetchart:
-  auto: yes                   # Auto-fetch artwork
-  sources: coverart musicbrainz amazon google  # Multiple sources for best results
+  auto: yes
+  sources: [coverart, musicbrainz, amazon, google, fanarttv, albumart] # More sources for better art
   
 embedart:
-  auto: yes                   # Auto-embed artwork
-  maxwidth: 1000              # High-res images
+  auto: yes
+  maxwidth: 1200              # High-resolution artwork
 
-# Genre classification
+# Genre settings
 lastgenre:
-  auto: yes                   # Auto-add genres
-  source: album               # Use album-level genres
+  auto: yes
+  source: album
 
 # Lyrics settings
 lyrics:
-  auto: yes                   # Auto-fetch lyrics
-  fallback: ''                # No fallback if not found
+  auto: yes
+  fallback: ''
 
-# Web interface
+# Web interface (no changes)
 web:
   host: 0.0.0.0
   port: 8337
 
-# Path formatting
+# Path formatting (no changes)
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
   singleton: Singles/$artist - $title
   comp: Compilations/$album%aunique{}/$track - $title
+
