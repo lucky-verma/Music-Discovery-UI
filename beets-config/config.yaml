@@ -1,0 +1,78 @@
+# Beets configuration for Lucky's Music Empire
+directory: /music/organized
+library: /config/musiclibrary.db
+
+# Import settings
+import:
+  move: no                    # Keep originals, copy to organized
+  write: yes                  # Write metadata to files
+  duplicate_action: merge     # Handle duplicates intelligently
+  incremental: yes            # Only process new files
+  quiet_fallback: skip       # Skip unidentifiable tracks
+  timid: no                   # Don't ask for confirmation
+  
+# Enable powerful plugins
+plugins: [
+  fetchart,                   # Download album artwork
+  embedart,                   # Embed artwork in files
+  lastgenre,                  # Genre classification via Last.fm
+  discogs,                    # Discogs metadata source
+  duplicates,                 # Duplicate detection
+  info,                       # Extended track information
+  web,                        # Web interface
+  acousticbrainz,            # Audio analysis
+  chroma,                     # Audio fingerprinting
+  scrub,                      # Remove unwanted metadata
+  rewrite                     # Rewrite metadata patterns
+]
+
+# MusicBrainz settings
+musicbrainz:
+  searchlimit: 10
+  extra_tags: [year, catalognum, country, media, label]
+
+# Album art settings
+fetchart:
+  auto: yes
+  sources: coverart musicbrainz amazon google fanarttv
+  store_source: yes
+
+# Embed artwork
+embedart:
+  auto: yes
+  maxwidth: 1000
+  remove_art_file: no
+
+# Genre classification
+lastgenre:
+  auto: yes
+  source: album
+
+# Web interface
+web:
+  host: 0.0.0.0
+  port: 8337
+
+# Path formatting for organized music
+paths:
+  default: $albumartist/$album%aunique{}/$track - $title
+  singleton: Non-Album/$artist - $title
+  comp: Compilations/$album%aunique{}/$track - $title
+  albumtype:soundtrack: Soundtracks/$album/$track - $title
+
+# Duplicate handling
+duplicates:
+  album: no
+  checksum: no
+  copy: /music/duplicates
+  move: no
+  strict: no
+  tiebreak:
+    items: [bitrate, length]
+
+# Clean up patterns
+rewrite:
+  '^\.': _           # Replace leading dots
+  '[\\/]': _         # Replace slashes
+  '^-': _            # Replace leading dashes
+  '\s+$': ''         # Remove trailing whitespace

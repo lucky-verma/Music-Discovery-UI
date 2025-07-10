@@ -66,3 +66,20 @@ services:
       - /music:/music
     depends_on:
       - navidrome
+  
+  beets:
+    image: lscr.io/linuxserver/beets:latest
+    container_name: beets
+    restart: unless-stopped
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=America/Chicago
+    ports:
+      - "8337:8337"
+    volumes:
+      - ./beets-config:/config
+      - /music:/music
+      - /music/beets-imports:/imports
+    depends_on:
+      - navidrome
