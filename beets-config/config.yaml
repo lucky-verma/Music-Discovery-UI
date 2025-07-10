@@ -1,69 +1,41 @@
-# Beets configuration for Lucky's Music Empire
+# Non-interactive Beets configuration
 directory: /music/organized
 library: /config/musiclibrary.db
 
-# FIXED: Non-interactive import settings
+# FIXED: Fully non-interactive import settings
 import:
-  move: no                    # Keep originals, copy to organized
+  move: no                    # Copy files, don't move them
   write: yes                  # Write metadata to files
-  duplicate_action: merge     # Handle duplicates intelligently
   incremental: yes            # Only process new files
-  quiet_fallback: skip       # Skip unidentifiable tracks WITHOUT prompting
+  quiet_fallback: skip       # Skip unidentifiable tracks
   timid: no                   # Don't ask for confirmation
-  autotag: yes               # Enable automatic tagging
-  quiet: no                  # Show progress but don't prompt
-  default_action: apply      # Apply best match automatically
-  none_rec_action: skip      # Skip items with no recommendations
-  strong_rec_thresh: 0.04    # Lower threshold for accepting matches
-  medium_rec_thresh: 0.25    # Medium confidence threshold
+  autotag: no                 # Disable MusicBrainz matching entirely
+  quiet: yes                  # Suppress prompts
+  default_action: skip        # Default action for ambiguous matches
+  none_rec_action: skip       # Skip items with no recommendations
+  detail: no                  # Don't show detailed info
+  group_albums: no            # Don't try to group into albums
   
-# Enable core plugins
+# Enable minimal plugins only
 plugins: [
   fetchart,
   embedart,
-  lastgenre,
-  duplicates,
-  info,
-  web,
-  scrub
+  web
 ]
-
-# MusicBrainz settings
-musicbrainz:
-  searchlimit: 10
-
-# Album art settings
-fetchart:
-  auto: yes
-  sources: coverart musicbrainz amazon google
-
-# Embed artwork
-embedart:
-  auto: yes
-  maxwidth: 1000
-
-# Genre classification
-lastgenre:
-  auto: yes
-  source: album
 
 # Web interface
 web:
   host: 0.0.0.0
   port: 8337
 
-# Path formatting for organized music
+# Simple path formatting
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
-  singleton: Non-Album/$artist - $title
-  comp: Compilations/$album%aunique{}/$track - $title
-
-# Duplicate handling
-duplicates:
-  album: no
-  checksum: no
-  copy: /music/duplicates
-  move: no
-  strict: no
-  tiebreak:
-    items: [bitrate, length]
+  singleton: Singles/$artist - $title
+  
+# Album art settings (minimal)
+fetchart:
+  auto: no                    # Don't auto-fetch (avoid delays)
+  
+embedart:
+  auto: no                    # Don't auto-embed (avoid delays)
