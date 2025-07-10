@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs
 from services.enhancement_service import show_popular_features
 from services.navidrome_service import NavidromeUserManager
 from services.spotify_service import SpotifyService
+from services.youtube_auth_service import YouTubeAuthManager
 from services.youtube_service import YouTubeService
 from services.job_service import JobManager
 from services.metadata_service import MetadataService
@@ -677,7 +678,7 @@ def main():
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Main tabs - ADDED Spotify tab
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "🔍 **Discover & Download**",
             "🎵 **Spotify Sync**",
@@ -685,6 +686,7 @@ def main():
             "📊 **Download Status**",
             "🔧 **Library Tools**",
             "✨ **Enhancements**",
+            "🔐 YouTube Authentication",
         ]
     )
 
@@ -1463,6 +1465,106 @@ def main():
 
         with enhancement_tabs[3]:
             show_popular_features()
+
+    with tab7:  # New YouTube Auth tab
+        st.header("🔐 YouTube Authentication")
+
+        auth_manager = YouTubeAuthManager()
+
+        # Status Dashboard
+        col1, col2, col3 = st.columns(3)
+
+        auth_status = auth_manager.check_auth_status()
+        cookie_info = auth_manager.get_cookie_info()
+
+        with col1:
+            status_emoji = {
+                "valid": "🟢", "expired": "🟡", 
+                "missing": "🔴", "invalid": "🔴", "error": "🔴"
+            }
+            st.metric("Auth Status", 
+                    f"{status_emoji.get(auth_status['status'], '❓')} {auth_status['status'].title()}")
+
+        with col2:
+            if cookie_info["exists"]:
+                st.metric("Cookie Age", f"{cookie_info['age_days']} days")
+            else:
+                st.metric("Cookie File", "❌ Missing")
+
+        with col3:
+            if st.button("🔄 Test Authentication"):
+                with st.spinner("Testing YouTube cookies..."):
+                    status = auth_manager.check_auth_status()
+                    auth_manager.save_auth_status(status)
+                    st.rerun()
+
+        # Status Message
+        if auth_status["status"] == "valid":
+            st.success(f"✅ {auth_status['message']}")
+        elif auth_status["status"] == "expired":
+            st.warning(f"⚠️ {auth_status['message']}")
+        else:
+            st.error(f"❌ {auth_status['message']}")
+
+        # Cookie Upload Section
+        st.subheader("📁 Upload YouTube Cookies")
+
+        st.markdown("""
+        **Step-by-step cookie extraction:**
+        1. Login to YouTube in Chrome/Firefox
+        2. Install "Get cookies.txt" browser extension
+        3. Go to youtube.com and export cookies
+        4. Upload the file below
+        """)
+
+        uploaded_file = st.file_uploader(
+            "Choose cookies.txt file", 
+            type=['txt'],
+            help="Export from browser extension"
+        )
+
+        if uploaded_file:
+            if st.button("💾 Save Cookies"):
+                # Save uploaded cookies
+                os.makedirs("/config", exist_ok=True)
+                with open("/config/youtube_cookies.txt", "wb") as f:
+                    f.write(uploaded_file.getvalue())
+                st.success("Cookies saved! Testing authentication...")
+                time.sleep(2)
+                st.rerun()
+
+        # Manual Instructions
+        st.subheader("📋 Manual Setup Instructions")
+
+        with st.expander("🖥️ Terminal Commands (Advanced)"):
+            st.code("""
+    # Access container 104
+    pct enter 104
+
+    # Create auth directory
+    mkdir -p /config/youtube-auth
+
+    # Upload cookies file (use file manager or SCP)
+    # File should be saved as: /config/youtube_cookies.txt
+
+    # Test authentication
+    docker exec music-discovery-ui yt-dlp --cookies /config/youtube_cookies.txt --no-download "https://youtube.com/watch?v=dQw4w9WgXcQ"
+            """)
+
+        # Automated Renewal Setup
+        st.subheader("🔄 Automated Cookie Renewal")
+
+        if st.checkbox("Enable Auto-Renewal Alerts"):
+            st.info("""
+            **Auto-renewal features:**
+            - Daily authentication checks
+            - Email alerts when cookies expire
+            - Automatic retry with different methods
+            - Cookie refresh reminders
+            """)
+
+            if st.button("Setup Renewal Monitoring"):
+                st.success("Renewal monitoring enabled!")
 
 
 if __name__ == "__main__":

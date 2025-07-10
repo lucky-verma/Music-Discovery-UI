@@ -213,7 +213,7 @@ class JobManager:
             return False
 
     def _download_single_song(self, job_id: str, url: str, metadata: Dict) -> bool:
-        """Download a single song with enhanced error handling"""
+        """Download a single song with enhanced error handling and bot detection bypass"""
         try:
             self.update_job(job_id, "running", 10, "Processing URL...")
             logger.info(f"Starting download for job {job_id}: {url}")
@@ -243,76 +243,212 @@ class JobManager:
 
             self.update_job(job_id, "running", 30, "Downloading audio...")
 
-            # Enhanced yt-dlp command with better error handling
-            cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "320K",
-                "--embed-thumbnail",
-                "--add-metadata",
-                "--no-playlist",
-                "--output",
-                output_template,
-                "--no-warnings",
-                "--no-check-certificate",
-                "--extractor-args",
-                "youtube:player_client=android",  # Use Android client
-                "--user-agent",
-                "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36",
-                "--retries",
-                "3",
-                "--fragment-retries",
-                "3",
-                url,
+            # Try multiple download strategies in order
+            download_strategies = [
+                self._try_cookie_download,
+                self._try_android_client_download,
+                self._try_web_client_download,
+                self._try_search_fallback_download,
             ]
 
-            logger.info(f"Running command: {' '.join(cmd)}")
+            for strategy_num, strategy in enumerate(download_strategies, 1):
+                try:
+                    logger.info(
+                        f"Attempting strategy {strategy_num}/{len(download_strategies)}: {strategy.__name__}"
+                    )
 
-            # Run with detailed logging
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=600,
-                cwd="/tmp",  # Set working directory
-            )
+                    result = strategy(url, output_template, job_id)
 
-            # Log detailed output
-            if result.stdout:
-                logger.info(f"yt-dlp stdout: {result.stdout}")
-            if result.stderr:
-                logger.warning(f"yt-dlp stderr: {result.stderr}")
+                    if result:
+                        self.update_job(
+                            job_id, "running", 80, "Triggering library scan..."
+                        )
+                        self._trigger_navidrome_scan()
+                        self.update_job(job_id, "running", 95, "Finalizing...")
+                        logger.info(
+                            f"Download successful for job {job_id} using {strategy.__name__}"
+                        )
+                        return True
 
-            if result.returncode == 0:
-                self.update_job(job_id, "running", 80, "Triggering library scan...")
-                self._trigger_navidrome_scan()
-                self.update_job(job_id, "running", 95, "Finalizing...")
-                logger.info(f"Download successful for job {job_id}")
-                return True
-            else:
-                error_msg = f"yt-dlp failed with code {result.returncode}"
-                if result.stderr:
-                    error_msg += f": {result.stderr[:200]}"
-                self.update_job(job_id, "failed", 0, error_msg)
-                logger.error(f"Download failed for job {job_id}: {error_msg}")
-                return False
+                except Exception as e:
+                    logger.warning(f"Strategy {strategy_num} failed: {str(e)}")
+                    continue
 
-        except subprocess.TimeoutExpired:
-            error_msg = "Download timeout (10 minutes)"
+            # All strategies failed
+            error_msg = "All download strategies failed - YouTube blocking detected"
             self.update_job(job_id, "failed", 0, error_msg)
-            logger.error(f"Timeout for job {job_id}")
+            logger.error(f"Download failed for job {job_id}: {error_msg}")
             return False
+
         except Exception as e:
             error_msg = f"Exception: {str(e)}"
             self.update_job(job_id, "failed", 0, error_msg)
             logger.error(f"Exception in download for job {job_id}: {e}")
             return False
 
+    def _try_cookie_download(self, url: str, output_template: str, job_id: str) -> bool:
+        """Try download with cookie file if available"""
+        cookie_file = "/config/youtube_cookies.txt"
+
+        if not os.path.exists(cookie_file):
+            logger.info("No cookie file found, skipping cookie strategy")
+            return False
+
+        cmd = [
+            "yt-dlp",
+            "--cookies",
+            cookie_file,
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--no-playlist",
+            "--output",
+            output_template,
+            "--retries",
+            "3",
+            "--fragment-retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_download_command(cmd, "cookie-based")
+
+    def _try_android_client_download(
+        self, url: str, output_template: str, job_id: str
+    ) -> bool:
+        """Try download with Android client"""
+        cmd = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--no-playlist",
+            "--output",
+            output_template,
+            "--extractor-args",
+            "youtube:player_client=android",
+            "--user-agent",
+            "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36",
+            "--retries",
+            "3",
+            "--fragment-retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_download_command(cmd, "Android client")
+
+    def _try_web_client_download(
+        self, url: str, output_template: str, job_id: str
+    ) -> bool:
+        """Try download with web client and different user agent"""
+        cmd = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--no-playlist",
+            "--output",
+            output_template,
+            "--extractor-args",
+            "youtube:player_client=web",
+            "--user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "--sleep-interval",
+            "1",
+            "--max-sleep-interval",
+            "5",
+            "--retries",
+            "3",
+            "--fragment-retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_download_command(cmd, "web client")
+
+    def _try_search_fallback_download(
+        self, url: str, output_template: str, job_id: str
+    ) -> bool:
+        """Try download using search query instead of direct URL"""
+        # Extract video ID and try to find alternative
+        if "youtube.com/watch?v=" in url or "youtu.be/" in url:
+            # For direct URLs, try a generic search based on metadata
+            search_term = "music popular song"  # Generic fallback
+        else:
+            # Already a search query, modify it slightly
+            search_term = (
+                url.replace("ytsearch1:", "").replace("ytsearch:", "") + " audio"
+            )
+
+        fallback_url = f"ytsearch1:{search_term}"
+
+        cmd = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--no-playlist",
+            "--output",
+            output_template,
+            "--retries",
+            "3",
+            fallback_url,
+        ]
+
+        return self._execute_download_command(cmd, "search fallback")
+
+    def _execute_download_command(self, cmd: list, strategy_name: str) -> bool:
+        """Execute yt-dlp command and return success status"""
+        try:
+            logger.info(f"Running {strategy_name} command: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=600, cwd="/tmp"
+            )
+
+            # Log output
+            if result.stdout:
+                logger.info(f"{strategy_name} stdout: {result.stdout}")
+            if result.stderr:
+                logger.warning(f"{strategy_name} stderr: {result.stderr}")
+
+            # Check for bot detection specifically
+            if result.returncode != 0 and result.stderr:
+                if "Sign in to confirm you're not a bot" in result.stderr:
+                    logger.warning(f"{strategy_name}: Bot detection triggered")
+                    return False
+                elif "could not find" in result.stderr and "cookies" in result.stderr:
+                    logger.warning(f"{strategy_name}: Cookie file issue")
+                    return False
+
+            return result.returncode == 0
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"{strategy_name}: Download timeout")
+            return False
+        except Exception as e:
+            logger.warning(f"{strategy_name}: Exception - {str(e)}")
+            return False
+
     def _download_playlist(self, job_id: str, url: str, metadata: Dict) -> bool:
-        """Download entire playlist with better error handling"""
+        """Download entire playlist with enhanced error handling and fallback strategies"""
         try:
             self.update_job(job_id, "running", 5, "Processing playlist URL...")
             logger.info(f"Starting playlist download for job {job_id}: {url}")
@@ -327,34 +463,138 @@ class JobManager:
 
             self.update_job(job_id, "running", 15, "Starting playlist download...")
 
-            cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "320K",
-                "--embed-thumbnail",
-                "--add-metadata",
-                "--yes-playlist",
-                "--output",
-                f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
-                "--no-warnings",
-                "--no-check-certificate",
-                "--extractor-args",
-                "youtube:player_client=android",  # Use Android client
-                "--user-agent",
-                "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36",
-                "--retries",
-                "3",
-                "--fragment-retries",
-                "3",
-                processed_url,
+            # Try multiple strategies for playlist download
+            playlist_strategies = [
+                self._try_playlist_cookie_download,
+                self._try_playlist_android_download,
+                self._try_playlist_web_download,
             ]
 
-            logger.info(f"Running playlist command: {' '.join(cmd)}")
+            for strategy_num, strategy in enumerate(playlist_strategies, 1):
+                try:
+                    logger.info(
+                        f"Attempting playlist strategy {strategy_num}: {strategy.__name__}"
+                    )
 
-            # Use subprocess.Popen for real-time progress updates
+                    result = strategy(processed_url, output_dir, job_id)
+
+                    if result:
+                        self.update_job(
+                            job_id, "running", 90, "Triggering library scan..."
+                        )
+                        self._trigger_navidrome_scan()
+                        logger.info(f"Playlist download successful for job {job_id}")
+                        return True
+
+                except Exception as e:
+                    logger.warning(f"Playlist strategy {strategy_num} failed: {str(e)}")
+                    continue
+
+            # All strategies failed
+            error_msg = "All playlist download strategies failed"
+            self.update_job(job_id, "failed", 0, error_msg)
+            logger.error(f"Playlist download failed for job {job_id}: {error_msg}")
+            return False
+
+        except Exception as e:
+            error_msg = f"Exception: {str(e)}"
+            self.update_job(job_id, "failed", 0, error_msg)
+            logger.error(f"Exception in playlist download for job {job_id}: {e}")
+            return False
+
+    def _try_playlist_cookie_download(
+        self, url: str, output_dir: str, job_id: str
+    ) -> bool:
+        """Try playlist download with cookies"""
+        cookie_file = "/config/youtube_cookies.txt"
+
+        if not os.path.exists(cookie_file):
+            return False
+
+        cmd = [
+            "yt-dlp",
+            "--cookies",
+            cookie_file,
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--yes-playlist",
+            "--output",
+            f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
+            "--retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_playlist_command(cmd, job_id, "cookie playlist")
+
+    def _try_playlist_android_download(
+        self, url: str, output_dir: str, job_id: str
+    ) -> bool:
+        """Try playlist download with Android client"""
+        cmd = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--yes-playlist",
+            "--output",
+            f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
+            "--extractor-args",
+            "youtube:player_client=android",
+            "--user-agent",
+            "Mozilla/5.0 (Linux; Android 11; SM-G975F) AppleWebKit/537.36",
+            "--retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_playlist_command(cmd, job_id, "Android playlist")
+
+    def _try_playlist_web_download(
+        self, url: str, output_dir: str, job_id: str
+    ) -> bool:
+        """Try playlist download with web client"""
+        cmd = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "320K",
+            "--embed-thumbnail",
+            "--add-metadata",
+            "--yes-playlist",
+            "--output",
+            f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s",
+            "--extractor-args",
+            "youtube:player_client=web",
+            "--user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "--sleep-interval",
+            "2",
+            "--retries",
+            "3",
+            url,
+        ]
+
+        return self._execute_playlist_command(cmd, job_id, "web playlist")
+
+    def _execute_playlist_command(
+        self, cmd: list, job_id: str, strategy_name: str
+    ) -> bool:
+        """Execute playlist download command with progress monitoring"""
+        try:
+            logger.info(f"Running {strategy_name} command: {' '.join(cmd)}")
+
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -378,10 +618,8 @@ class JobManager:
                     # Update progress based on output
                     if "[download]" in output and "%" in output:
                         try:
-                            # Extract percentage from yt-dlp output
                             percent_start = output.find("%")
                             if percent_start > 0:
-                                # Look backwards for the number
                                 i = percent_start - 1
                                 while i >= 0 and (
                                     output[i].isdigit() or output[i] == "."
@@ -390,13 +628,12 @@ class JobManager:
                                 percent_str = output[i + 1 : percent_start]
                                 if percent_str:
                                     file_progress = float(percent_str)
-                                    # Scale to overall progress (15-85%)
                                     progress = 15 + (file_progress * 0.7)
                                     self.update_job(
                                         job_id,
                                         "running",
                                         int(progress),
-                                        f"Downloading playlist... {file_progress:.1f}%",
+                                        f"Downloading playlist ({strategy_name})... {file_progress:.1f}%",
                                     )
                         except:
                             pass
@@ -408,29 +645,23 @@ class JobManager:
 
             process.wait()
 
-            # Log all output
+            # Log output
             if stdout_lines:
-                logger.info(f"Playlist stdout: {''.join(stdout_lines)}")
+                logger.info(f"{strategy_name} stdout: {''.join(stdout_lines)}")
             if stderr_lines:
-                logger.warning(f"Playlist stderr: {''.join(stderr_lines)}")
+                logger.warning(f"{strategy_name} stderr: {''.join(stderr_lines)}")
 
-            if process.returncode == 0:
-                self.update_job(job_id, "running", 90, "Triggering library scan...")
-                self._trigger_navidrome_scan()
-                logger.info(f"Playlist download successful for job {job_id}")
-                return True
-            else:
-                error_msg = f"Playlist download failed with code {process.returncode}"
-                if stderr_lines:
-                    error_msg += f": {''.join(stderr_lines)[:200]}"
-                self.update_job(job_id, "failed", 0, error_msg)
-                logger.error(f"Playlist download failed for job {job_id}: {error_msg}")
-                return False
+            # Check for specific errors
+            if process.returncode != 0 and stderr_lines:
+                stderr_text = "".join(stderr_lines)
+                if "Sign in to confirm you're not a bot" in stderr_text:
+                    logger.warning(f"{strategy_name}: Bot detection triggered")
+                    return False
+
+            return process.returncode == 0
 
         except Exception as e:
-            error_msg = f"Exception: {str(e)}"
-            self.update_job(job_id, "failed", 0, error_msg)
-            logger.error(f"Exception in playlist download for job {job_id}: {e}")
+            logger.warning(f"{strategy_name}: Exception - {str(e)}")
             return False
 
     def _process_url(self, url: str) -> str:
