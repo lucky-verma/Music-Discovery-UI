@@ -4,44 +4,37 @@ library: /config/musiclibrary.db
 
 # Import settings
 import:
-  move: no                    # Keep originals, copy to organized
-  write: yes                  # Write metadata to files
-  duplicate_action: merge     # Handle duplicates intelligently
-  incremental: yes            # Only process new files
-  quiet_fallback: skip       # Skip unidentifiable tracks
-  timid: no                   # Don't ask for confirmation
+  move: no
+  write: yes
+  duplicate_action: merge
+  incremental: yes
+  quiet_fallback: skip
+  timid: no
   
-# Enable powerful plugins
+# Enable core plugins (removed problematic ones)
 plugins: [
-  fetchart,                   # Download album artwork
-  embedart,                   # Embed artwork in files
-  lastgenre,                  # Genre classification via Last.fm
-  discogs,                    # Discogs metadata source
-  duplicates,                 # Duplicate detection
-  info,                       # Extended track information
-  web,                        # Web interface
-  acousticbrainz,            # Audio analysis
-  chroma,                     # Audio fingerprinting
-  scrub,                      # Remove unwanted metadata
-  rewrite                     # Rewrite metadata patterns
+  fetchart,
+  embedart,
+  lastgenre,
+  duplicates,
+  info,
+  web,
+  scrub
 ]
 
 # MusicBrainz settings
 musicbrainz:
   searchlimit: 10
-  extra_tags: [year, catalognum, country, media, label]
 
 # Album art settings
 fetchart:
   auto: yes
-  sources: coverart musicbrainz amazon google fanarttv
-  store_source: yes
+  sources: coverart musicbrainz amazon google
 
 # Embed artwork
 embedart:
   auto: yes
   maxwidth: 1000
-  remove_art_file: no
 
 # Genre classification
 lastgenre:
@@ -58,7 +51,6 @@ paths:
   default: $albumartist/$album%aunique{}/$track - $title
   singleton: Non-Album/$artist - $title
   comp: Compilations/$album%aunique{}/$track - $title
-  albumtype:soundtrack: Soundtracks/$album/$track - $title
 
 # Duplicate handling
 duplicates:
@@ -70,9 +62,9 @@ duplicates:
   tiebreak:
     items: [bitrate, length]
 
-# Clean up patterns
+# Clean up patterns (proper YAML format)
 rewrite:
-  '^\.': '_'         # Replace leading dots
-  '[/\\]': '_'       # Replace slashes (corrected escaping)
-  '^-': '_'          # Replace leading dashes  
-  '\s+$': ''         # Remove trailing whitespace
+  '^\\.': _          # Replace leading dots
+  '[/\\\\]': _       # Replace slashes
+  '^-': _            # Replace leading dashes
+  '\\s+$': ''        # Remove trailing whitespace
