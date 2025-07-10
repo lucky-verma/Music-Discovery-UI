@@ -20,7 +20,12 @@ import:
 plugins: [
   fetchart,
   embedart,
-  web
+  lastgenre,
+  duplicates,
+  info,
+  web,
+  scrub,
+  lyrics
 ]
 
 # Web interface
