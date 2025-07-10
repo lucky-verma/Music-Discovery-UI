@@ -2,16 +2,22 @@
 directory: /music/organized
 library: /config/musiclibrary.db
 
-# Import settings
+# FIXED: Non-interactive import settings
 import:
-  move: no
-  write: yes
-  duplicate_action: merge
-  incremental: yes
-  quiet_fallback: skip
-  timid: no
+  move: no                    # Keep originals, copy to organized
+  write: yes                  # Write metadata to files
+  duplicate_action: merge     # Handle duplicates intelligently
+  incremental: yes            # Only process new files
+  quiet_fallback: skip       # Skip unidentifiable tracks WITHOUT prompting
+  timid: no                   # Don't ask for confirmation
+  autotag: yes               # Enable automatic tagging
+  quiet: no                  # Show progress but don't prompt
+  default_action: apply      # Apply best match automatically
+  none_rec_action: skip      # Skip items with no recommendations
+  strong_rec_thresh: 0.04    # Lower threshold for accepting matches
+  medium_rec_thresh: 0.25    # Medium confidence threshold
   
-# Enable core plugins (removed problematic ones)
+# Enable core plugins
 plugins: [
   fetchart,
   embedart,
@@ -61,10 +67,3 @@ duplicates:
   strict: no
   tiebreak:
     items: [bitrate, length]
-
-# Clean up patterns (proper YAML format)
-rewrite:
-  '^\\.': _          # Replace leading dots
-  '[/\\\\]': _       # Replace slashes
-  '^-': _            # Replace leading dashes
-  '\\s+$': ''        # Remove trailing whitespace
