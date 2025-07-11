@@ -75,11 +75,13 @@ services:
       - PUID=0
       - PGID=0
       - TZ=America/Chicago
+      - BEETSDIR=/config
     ports:
       - "8337:8337"
     volumes:
       - ./beets-config:/config
       - /music:/music
-      - /music/beets-imports:/imports
+      - /music/organized:/music/organized
+      - /music/duplicates:/music/duplicates
     depends_on:
       - navidrome

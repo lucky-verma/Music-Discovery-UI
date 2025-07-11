@@ -1,111 +1,180 @@
-# Production Beets Configuration - Audio Fingerprinting Enabled
+# Professional Beets Configuration - Optimized for Large Libraries
 directory: /music/organized
 library: /config/musiclibrary.db
 log: /config/beets.log
 
 # Import settings optimized for large libraries
 import:
-  move: no # Copy files (preserve originals)
-  copy: yes # Enable copying
-  write: yes # Write metadata to files
-  incremental: yes # Only process new files
-  quiet_fallback: asis # Import as-is if no match
-  timid: no # No confirmation prompts
-  autotag: yes # Enable automatic tagging
-  quiet: yes # Suppress unnecessary output
-  default_action: apply # Auto-apply best matches
-  none_rec_action: asis # Import unmatched files as-is
-  detail: no # No detailed prompts
-  group_albums: yes # Group tracks into albums
-  duplicate_action: skip # Skip duplicates
-  resume: yes # Resume interrupted imports
-
-  # Optimized matching thresholds for fingerprinting
-  strong_rec_thresh: 0.02 # Very permissive for fingerprint matches
-  medium_rec_thresh: 0.15 # Moderate for partial matches
-
-# Essential plugins for professional library
+  move: no                    # Copy files (safer)
+  copy: yes                   # Explicit copy
+  write: yes                  # Write metadata to files
+  incremental: yes            # Skip already imported files
+  quiet_fallback: asis        # Import unmatched files as-is
+  timid: no                   # No prompts
+  autotag: yes               # Auto-tag with MusicBrainz
+  quiet: yes                 # Suppress unnecessary output
+  default_action: apply      # Auto-apply matches
+  none_rec_action: asis      # Import non-matches as-is
+  detail: no                 # No detailed prompts
+  group_albums: yes          # Group tracks into albums
+  duplicate_action: skip     # Skip duplicates
+  resume: yes                # Resume interrupted imports
+  
+  # Thresholds for automatic matching
+  strong_rec_thresh: 0.02    # Very permissive for fingerprinting
+  medium_rec_thresh: 0.15    # Moderate threshold
+  
+  # Performance settings
+  threaded: yes              # Use threading for faster imports
+  
+# Essential plugins for professional library management
 plugins:
-  - chroma # Audio fingerprinting (CRITICAL)
-  - fetchart # Album artwork
-  - embedart # Embed artwork in files
-  - lastgenre # Genre classification
-  - duplicates # Duplicate detection
-  - lyrics # Lyrics fetching
-  - scrub # Metadata cleaning
-  - web # Web interface
-  - info # Enhanced info display
-  - fromfilename # Extract tags from filenames
+  - chroma                   # Audio fingerprinting (CRITICAL)
+  - fetchart                 # Album art fetching
+  - embedart                 # Embed album art in files
+  - lastgenre                # Genre fetching from Last.fm
+  - lyrics                   # Lyrics fetching
+  - duplicates               # Duplicate detection
+  - scrub                    # Metadata cleaning
+  - fromfilename             # Guess tags from filename
+  - web                      # Web interface
+  - info                     # Show file info
+  - acousticbrainz           # Advanced audio analysis
+  - badfiles                 # Detect corrupted files
+  - edit                     # Edit metadata
+  - export                   # Export library data
+  - fuzzy                    # Fuzzy matching
+  - hook                     # Custom hooks
+  - missing                  # Find missing albums
+  - random                   # Random selection
+  - replaygain               # ReplayGain calculation
+  - smartplaylist            # Smart playlists
+  - zero                     # Zero-value field handling
 
 # MusicBrainz settings
 musicbrainz:
-  searchlimit: 10 # Increased for better matching
-  extra_tags: [year, originalyear, catalog, catalognum, country, media, label]
+  searchlimit: 10            # Increased for better matches
+  extra_tags: [year, catalognum, country, media, label]
+  genres: yes                # Include genre information
 
 # Chroma (audio fingerprinting) settings
-match:
-  strong_rec_thresh: 0.02 # Very lenient for fingerprint matches
-  medium_rec_thresh: 0.15
-  distance_weights:
-    chroma: 15.0 # High weight on audio fingerprints
-    source: 0.5 # Lower weight on filename matching
+chroma:
+  auto: yes                  # Auto-generate fingerprints
+  ffmpeg: /usr/bin/ffmpeg    # FFmpeg path (adjust if needed)
 
 # Album art settings
 fetchart:
-  auto: yes
-  cautious: no # Download art aggressively
+  auto: yes                  # Auto-fetch album art
   sources: [coverart, musicbrainz, amazon, google, fanarttv, albumart]
-  store_source: yes
-  high_resolution: yes
-
+  cautious: no               # Don't be overly cautious
+  cover_names: [cover, front, art, album, folder]
+  minwidth: 500              # Minimum image width
+  maxwidth: 1400             # Maximum image width
+  enforce_ratio: no          # Don't enforce aspect ratio
+  
 embedart:
-  auto: yes
-  maxwidth: 1200 # High-resolution artwork
-  remove_art_file: no # Keep separate art files
+  auto: yes                  # Auto-embed album art
+  maxwidth: 1200             # High quality embedding
+  compress: no               # Don't compress images
+  ifempty: no                # Embed even if art exists
 
 # Genre settings
 lastgenre:
-  auto: yes
-  source: album # Use album genres
-  fallback: Unknown
-  canonical: yes # Use canonical genre names
-  count: 1 # Single genre per track
-  separator: ", "
-
-# Lyrics settings
+  auto: yes                  # Auto-generate genres
+  source: album              # Use album for genre
+  fallback: ''               # No fallback genre
+  canonical: ''              # No canonical genres
+  count: 3                   # Max 3 genres
+  min_weight: 10             # Minimum genre weight
+  title_case: yes            # Title case genres
+  
+# Lyrics settings  
 lyrics:
-  auto: yes
-  fallback: ""
-  force: no
-  sources: [google, musixmatch, genius, azlyrics]
-
-# Metadata cleaning
-scrub:
-  auto: yes
-
-# Path formatting for organized library
+  auto: yes                  # Auto-fetch lyrics
+  google_API_key: ''         # Add if you have one
+  google_engine_ID: ''       # Add if you have one
+  genius_api_key: ''         # Add if you have one
+  fallback: ''               # No fallback lyrics
+  force: no                  # Don't overwrite existing lyrics
+  
+# Path format - Professional organization
 paths:
   default: $albumartist/$album%aunique{}/$track - $title
   singleton: Singles/$artist - $title
   comp: Compilations/$album%aunique{}/$track - $title
-
+  albumtype:soundtrack: Soundtracks/$album/$track - $title
+  albumtype:live: Live/$albumartist/$album%aunique{}/$track - $title
+  albumtype:remix: Remixes/$albumartist/$album%aunique{}/$track - $title
+  
 # Duplicate detection settings
 duplicates:
-  album: no # Focus on track duplicates
-  checksum: yes # Use file checksums
-  copy: no # Don't copy duplicates
-  move: yes # Move duplicates to separate folder
-  path: /music/duplicates # Duplicate storage location
-  strict: no # Allow some variation
-
-# Web interface
+  album: no                  # Don't check album duplicates
+  checksum: no               # Don't use checksum
+  copy: no                   # Don't copy duplicates
+  move: yes                  # Move duplicates
+  dest: /music/duplicates    # Destination for duplicates
+  strict: no                 # Less strict matching
+  tiebreak:                  # Tiebreaker preferences
+    items: [bitrate, length]
+    
+# File corruption detection
+badfiles:
+  check_on_import: yes       # Check files during import
+  commands:
+    mp3: [mp3val, -f, -nb]
+    flac: [flac, -wst]
+    m4a: [mp4chaps, -z]
+    
+# ReplayGain settings
+replaygain:
+  auto: yes                  # Auto-calculate ReplayGain
+  backend: gstreamer         # Use GStreamer backend
+  overwrite: no              # Don't overwrite existing values
+  
+# Zero-value handling
+zero:
+  fields: [track, tracktotal, disc, disctotal]
+  update_database: yes       # Update database with zero values
+  
+# Web interface settings
 web:
   host: 0.0.0.0
   port: 8337
-  cors: yes
-  cors_supports_credentials: yes
-
-# Performance optimization
-threaded: yes
-timeout: 30.0
-verbose: 1
+  cors: yes                  # Enable CORS for external access
+  
+# AcousticBrainz settings (advanced audio analysis)
+acousticbrainz:
+  auto: yes                  # Auto-submit to AcousticBrainz
+  tags: [danceability, energy, valence, tempo]
+  
+# Fuzzy matching settings
+fuzzy:
+  threshold: 0.7             # Fuzzy matching threshold
+  
+# Smart playlist settings
+smartplaylist:
+  auto: yes                  # Auto-generate smart playlists
+  playlists:
+    - name: 'Recently Added.m3u'
+      query: 'added+ path:/music/organized'
+    - name: 'High Energy.m3u'
+      query: 'energy:0.8..'
+    - name: 'Top Rated.m3u'
+      query: 'rating:4..'
+      
+# Hook settings for automation
+hook:
+  hooks:
+    - event: import
+      command: "echo \"Imported: {item.path}\""
+    - event: album_imported  
+      command: curl -X POST http://192.168.1.39:4533/api/scanner/scan
+      
+# Item field customization
+item_fields:
+  multidisc: 1 if disctotal > 1 else 0
+  
+# Performance and reliability settings
+threaded: yes                # Use threading
+timeout: 30.0               # Network timeout
+verbose: 1                  # Moderate verbosity
