@@ -1,6 +1,9 @@
+# ENHANCED Beets Configuration with API Integration
 directory: /music/organized
-library:   /config/musiclibrary.db
+library: /config/musiclibrary.db
+log: /config/beets.log
 
+# Import settings - optimized for speed with API enhancements
 import:
   move: no
   copy: yes
@@ -16,12 +19,97 @@ import:
   strong_rec_thresh: 0.04
   medium_rec_thresh: 0.15
 
-plugins: [chroma, fetchart, embedart, duplicates]
+# ENHANCED: Plugins with API integration
+plugins:
+  [
+    chroma,
+    fetchart,
+    embedart,
+    duplicates,
+    lyrics,
+    lastgenre,
+    scrub,
+    fromfilename,
+  ]
 
-# minimal art
+# ENHANCED: Album Art with Multiple Sources including Discogs
 fetchart:
   auto: yes
-  sources: coverart musicbrainz
+  sources: [coverart, musicbrainz, discogs, albumart, itunes, amazon]
+  cautious: no
+  cover_names: [cover, front, art, album, folder]
+  minwidth: 500
+  maxwidth: 1400
+  store_source: yes
+  high_resolution: yes
+
+# Embed high-quality album art
 embedart:
   auto: yes
-  maxwidth: 800
+  maxwidth: 1200
+  compress: no
+
+# GENIUS: Lyrics Integration
+lyrics:
+  auto: yes
+  sources: [genius, lyrics.ovh]
+  genius_api_key: BzzijSLkgTY7xDCzU4RqVy6FUTFWBF_whOtldgZcbF5MlDKg3pymXgE9gLwZ8dZE
+  fallback: ""
+  force: no
+
+# LAST.FM: Genre and Metadata Enhancement
+lastgenre:
+  auto: yes
+  source: album
+  fallback: ""
+  canonical: ""
+  count: 3
+  min_weight: 10
+  title_case: yes
+
+# Last.fm API Configuration
+lastfm:
+  api_key: f16d5f29d2118e1ee559857954814580
+  api_secret: 255404336083f46bbbc9b1fa4217cff2
+
+# DISCOGS: Enhanced metadata (configured via fetchart)
+discogs:
+  consumer_key: dtJUyWFLuRLzNCFFEcCh
+  consumer_secret: ffyCvRjdtuKPPKbMQrTEhAARkUvdywtE
+
+# Duplicate handling
+duplicates:
+  album: no
+  checksum: no
+  copy: no
+  move: yes
+  dest: /music/duplicates
+
+# Audio fingerprinting for better matching
+chroma:
+  auto: yes
+
+# Clean metadata
+scrub:
+  auto: yes
+
+# Extract metadata from filenames when tags are missing
+fromfilename:
+  auto: yes
+
+# Path formatting
+paths:
+  default: $albumartist/$album%aunique{}/$track - $title
+  singleton: Singles/$artist - $title
+  comp: Compilations/$album%aunique{}/$track - $title
+
+# MusicBrainz settings
+musicbrainz:
+  searchlimit: 10
+  extra_tags: [year, catalognum, country, media, label]
+  genres: yes
+
+# Performance settings
+threaded: yes
+timeout: 30.0
+verbose: 1

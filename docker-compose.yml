@@ -7,46 +7,49 @@ services:
       - "4533:4533"
     environment:
       # Core Settings
-      - ND_MUSICFOLDER=/music
-      - ND_UIWELCOMEMESSAGE="🎵 Lucky's Music Empire"
+      - ND_MUSICFOLDER=/music/organized  # CHANGED: Point to organized library
+      - ND_UIWELCOMEMESSAGE="🎵 Lucky's Enhanced Music Empire"
       - ND_LOGLEVEL=info
       
       # IMPROVED: Scanning & Performance
-      - ND_SCANSCHEDULE=@every 10m                    # More frequent scans for new downloads
-      - ND_SCANINTERVAL=5s                            # Faster individual file scanning
-      - ND_AUTOIMPORTPLAYLISTS=true                   # Auto-import M3U playlists
-      - ND_IGNOREDARTICLES=The,El,La,Los,Las,Le,Les   # Better sorting (ignore "The", etc.)
+      - ND_SCANSCHEDULE=@every 5m        # More frequent for Beets-processed files
+      - ND_SCANINTERVAL=3s               # Faster scanning
+      - ND_AUTOIMPORTPLAYLISTS=true
+      - ND_IGNOREDARTICLES=The,El,La,Los,Las,Le,Les
       
       # IMPROVED: Transcoding & Cache
-      - ND_TRANSCODINGCACHESIZE=2GB                   # Increased cache for better performance
-      - ND_ENABLETRANSCODINGCACHE=true                # Enable transcoding cache
-      - ND_FFMPEGPATH=/usr/bin/ffmpeg                 # Explicit FFmpeg path
+      - ND_TRANSCODINGCACHESIZE=3GB      # Increased for high-quality files
+      - ND_ENABLETRANSCODINGCACHE=true
+      - ND_FFMPEGPATH=/usr/bin/ffmpeg
       
       # IMPROVED: User Experience
-      - ND_SESSIONTIMEOUT=72h                         # Extended session (3 days)
-      - ND_ENABLEDOWNLOADS=true                       # Allow downloads
-      - ND_ENABLESHARING=true                         # Enable sharing features
-      - ND_ENABLESTARRATING=true                      # Enable 5-star rating system
-      - ND_ENABLEGRAVATAR=true                        # User profile pictures
-      - ND_DEFAULTTHEME=Dark                          # Dark theme by default
+      - ND_SESSIONTIMEOUT=72h
+      - ND_ENABLEDOWNLOADS=true
+      - ND_ENABLESHARING=true
+      - ND_ENABLESTARRATING=true
+      - ND_ENABLEGRAVATAR=true
+      - ND_DEFAULTTHEME=Dark
       
       # IMPROVED: Playlist & Organization
-      - ND_MAXSIDEBARPLAYLISTS=50                     # Show more playlists in sidebar
-      - ND_PLAYLISTSPATH=/music/playlists             # Dedicated playlist folder
-      - ND_COVERARTPRIORITY=embedded,cover.*,folder.*,front.*  # Album art priority
+      - ND_MAXSIDEBARPLAYLISTS=100       # More playlists for organized library
+      - ND_PLAYLISTSPATH=/music/playlists
+      - ND_COVERARTPRIORITY=embedded,cover.*,folder.*,front.*
       
-      # IMPROVED: External Services
-      - ND_ENABLEEXTERNALSERVICES=true                # Last.fm, Spotify scrobbling
-      - ND_LASTFM_ENABLED=true                        # Enable Last.fm integration
+      # ENHANCED: Last.fm Integration
+      - ND_ENABLEEXTERNALSERVICES=true
+      - ND_LASTFM_ENABLED=true
+      - ND_LASTFM_APIKEY=f16d5f29d2118e1ee559857954814580
+      - ND_LASTFM_SECRET=255404336083f46bbbc9b1fa4217cff2
+      - ND_LASTFM_LANGUAGE=en
       
       # IMPROVED: Performance & Stability
-      - ND_ENABLEGZIP=true                            # Enable gzip compression
-      - ND_REVERSEPROXYUSERHEADER=""                  # For reverse proxy setups
-      - ND_REVERSEPROXYWHITELIST=""                   # Security for reverse proxy
+      - ND_ENABLEGZIP=true
+      - ND_REVERSEPROXYUSERHEADER=""
+      - ND_REVERSEPROXYWHITELIST=""
       
     volumes:
       - ./navidrome-data:/data
-      - /music:/music:ro
+      - /music:/music:ro  # Read-only access to all music
     user: "0:0"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4533/ping"]
@@ -62,8 +65,14 @@ services:
       - "8501:8501"
     environment:
       - TZ=America/Chicago
+      # ENHANCED: API credentials for the app
+      - GENIUS_CLIENT_ID=BzzijSLkgTY7xDCzU4RqVy6FUTFWBF_whOtldgZcbF5MlDKg3pymXgE9gLwZ8dZE
+      - GENIUS_CLIENT_SECRET=k-eyd0u1lg7p60R_ZOr6WesnYUCpHMzEcHqmhZZ-6lto6LaH72yXEUc9mHc5HL6rf87B-c4ob6J9CEAY4sc9fQ
+      - LASTFM_API_KEY=f16d5f29d2118e1ee559857954814580
+      - LASTFM_SECRET=255404336083f46bbbc9b1fa4217cff2
     volumes:
       - /music:/music 
+      - ./beets-config:/config  # ADDED: Access to Beets config
     depends_on:
       - navidrome
   
@@ -81,5 +90,7 @@ services:
     volumes:
       - ./beets-config:/config
       - /music:/music
+      - /music/organized:/music/organized  # ADDED: Explicit organized mount
+      - /music/duplicates:/music/duplicates  # ADDED: Duplicates handling
     depends_on:
       - navidrome
