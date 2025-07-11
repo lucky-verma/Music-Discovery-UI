@@ -46,7 +46,7 @@ services:
       
     volumes:
       - ./navidrome-data:/data
-      - /music:/music:ro
+      - /data/media/music:/music:ro
     user: "0:0"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4533/ping"]
@@ -63,7 +63,7 @@ services:
     environment:
       - TZ=America/Chicago
     volumes:
-      - /music:/music
+      - /data/media/music:/music 
     depends_on:
       - navidrome
   
@@ -80,8 +80,8 @@ services:
       - "8337:8337"
     volumes:
       - ./beets-config:/config
-      - /music:/music
-      - /music/organized:/music/organized
-      - /music/duplicates:/music/duplicates
+      - /data/media/music:/music
+      - /data/media/music/organized:/music/organized
+      - /data/media/music/duplicates:/music/duplicates
     depends_on:
       - navidrome
