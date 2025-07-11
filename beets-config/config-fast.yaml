@@ -1,52 +1,27 @@
-# PERFORMANCE-OPTIMIZED CONFIG - Save as /config/config-fast.yaml
 directory: /music/organized
-library: /config/musiclibrary.db
-log: /config/beets.log
+library:   /config/musiclibrary.db
 
 import:
   move: no
   copy: yes
   write: yes
-  incremental: yes
+  incremental: no
+  resume: no
   quiet_fallback: asis
   timid: no
   autotag: yes
   quiet: yes
-  default_action: apply
-  none_rec_action: asis
-  group_albums: yes
   duplicate_action: skip
-  resume: yes
-  strong_rec_thresh: 0.10 # Less aggressive matching for speed
-  medium_rec_thresh: 0.25
-  threaded: yes
+  group_albums: yes
+  strong_rec_thresh: 0.04
+  medium_rec_thresh: 0.15
 
-# MINIMAL PLUGINS for fast import
-plugins:
-  - chroma # Keep fingerprinting only
-  - fromfilename # Basic metadata from filenames
-  - duplicates # Essential duplicate handling
+plugins: [chroma, fetchart, embedart, duplicates]
 
-# Simplified paths
-paths:
-  default: $albumartist/$album%aunique{}/$track - $title
-  singleton: Singles/$artist - $title
-
-# Basic MusicBrainz settings
-musicbrainz:
-  searchlimit: 5 # Reduced for speed
-  extra_tags: [] # Minimal extra data
-
-chroma:
+# minimal art
+fetchart:
   auto: yes
-
-duplicates:
-  album: no
-  checksum: no
-  move: yes
-  dest: /music/duplicates
-
-# Performance settings
-threaded: yes
-timeout: 15.0 # Shorter timeout
-verbose: 0 # Minimal output
+  sources: coverart musicbrainz
+embedart:
+  auto: yes
+  maxwidth: 800
