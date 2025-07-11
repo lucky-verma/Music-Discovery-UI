@@ -9,6 +9,7 @@ import:
   copy: yes                   # Explicit copy
   write: yes                  # Write metadata to files
   incremental: yes            # Skip already imported files
+  parallel: yes             # Enable parallel processing
   quiet_fallback: asis        # Import unmatched files as-is
   timid: no                   # No prompts
   autotag: yes               # Auto-tag with MusicBrainz
@@ -40,7 +41,6 @@ plugins:
   - web                      # Web interface
   - info                     # Show file info
   - acousticbrainz           # Advanced audio analysis
-  - badfiles                 # Detect corrupted files
   - edit                     # Edit metadata
   - export                   # Export library data
   - fuzzy                    # Fuzzy matching
